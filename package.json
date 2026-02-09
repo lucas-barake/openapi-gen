@@ -24,7 +24,9 @@
     "check:all": "pnpm check && pnpm lint && pnpm test"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["dprint"]
+    "onlyBuiltDependencies": [
+      "dprint"
+    ]
   },
   "repository": {
     "type": "git",
@@ -42,6 +44,7 @@
     "@effect/vitest": "^0.27.0",
     "@types/node": "^22.15.18",
     "@types/swagger2openapi": "^7.0.4",
+    "@typescript/native-preview": "7.0.0-dev.20260209.1",
     "@vitest/coverage-v8": "^3.2.4",
     "dprint": "^0.51.1",
     "effect": "^3.19.16",
