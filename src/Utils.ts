@@ -27,6 +27,18 @@ export const camelize = (self: string): string => {
 
 export const identifier = (operationId: string) => String.capitalize(camelize(operationId))
 
+export const toKebabCase = (self: string): string => {
+  if (self.length === 0) return ""
+  let result = self
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+  return result
+}
+
 export const nonEmptyString = flow(
   Option.fromNullable<unknown>,
   Option.filter(String.isString),

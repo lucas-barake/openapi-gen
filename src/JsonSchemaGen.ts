@@ -12,6 +12,7 @@ const make = Effect.gen(function*() {
   const store = new Map<string, JsonSchema.JsonSchema>()
   const classes = new Set<string>()
   const enums = new Set<string>()
+  const errors = new Set<string>()
   const refStore = new Map<string, JsonSchema.JsonSchema>()
 
   function cleanupSchema(schema: JsonSchema.JsonSchema) {
@@ -148,12 +149,14 @@ const make = Effect.gen(function*() {
   ): Option.Option<string> => {
     const isClass = classes.has(name)
     const isEnum = enums.has(name)
+    const isError = errors.has(name)
     const topLevel = transformer.supportsTopLevel({
       importName,
       schema,
       name,
       isClass,
-      isEnum
+      isEnum,
+      isError
     })
     return toSource(
       importName,
@@ -171,7 +174,8 @@ const make = Effect.gen(function*() {
           name,
           source,
           isClass,
-          isEnum
+          isEnum,
+          isError
         })
       )
     )
@@ -403,16 +407,23 @@ const make = Effect.gen(function*() {
     return schema
   }
 
-  const generate = (importName: string) =>
+  const generate = (importName: string, filter?: ReadonlySet<string>) =>
     Effect.sync(() =>
       pipe(
         store.entries(),
+        Arr.filter(([name]) => filter === undefined || filter.has(name)),
         Arr.filterMap(([name, schema]) => topLevelSource(importName, name, schema)),
         Arr.join("\n\n")
       )
     )
 
-  return { addSchema, generate } as const
+  const getSchemaNames = (): ReadonlySet<string> => new Set(store.keys())
+
+  const markAsError = (name: string) => {
+    errors.add(name)
+  }
+
+  return { addSchema, generate, getSchemaNames, markAsError } as const
 })
 
 export class JsonSchemaGen extends Context.Tag("JsonSchemaGen")<
@@ -432,6 +443,7 @@ export class JsonSchemaTransformer extends Context.Tag("JsonSchemaTransformer")<
       readonly name: string
       readonly isClass: boolean
       readonly isEnum: boolean
+      readonly isError: boolean
     }): boolean
 
     onTopLevel(options: {
@@ -442,6 +454,7 @@ export class JsonSchemaTransformer extends Context.Tag("JsonSchemaTransformer")<
       readonly source: string
       readonly isClass: boolean
       readonly isEnum: boolean
+      readonly isError: boolean
     }): string
 
     onProperty(options: {
@@ -544,11 +557,16 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
   const pipeSource = (modifers: Array<string>) => modifers.length === 0 ? "" : `.pipe(${modifers.join(", ")})`
 
   return JsonSchemaTransformer.of({
-    supportsTopLevel({ isClass, isEnum }) {
-      return isClass || isEnum
+    supportsTopLevel({ isClass, isEnum, isError }) {
+      return isClass || isEnum || isError
     },
-    onTopLevel({ importName, schema, name, source, isClass, description }) {
+    onTopLevel({ importName, schema, name, source, isClass, isError, description }) {
       const isObject = "properties" in schema
+      if (isError && isObject) {
+        return `${
+          toComment(description)
+        }export class ${name} extends ${importName}.TaggedError<${name}>()("${name}", ${source}) {}`
+      }
       if (!isObject || !isClass) {
         return `${toComment(description)}export class ${name} extends ${source} {}`
       }

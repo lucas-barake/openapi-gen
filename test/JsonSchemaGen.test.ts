@@ -11,7 +11,7 @@ const runSchema = (
   Effect.gen(function*() {
     const gen = yield* JsonSchemaGen.JsonSchemaGen
     gen.addSchema(name, schema, undefined, options?.asStruct)
-    return yield* gen.generate("S")
+    return yield* gen.generate("Schema")
   }).pipe(
     JsonSchemaGen.with,
     Effect.provide(JsonSchemaGen.layerTransformerSchema)
@@ -35,15 +35,15 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.Struct(")
-        expect(output).toContain("\"name\": S.String")
-        expect(output).toContain("\"age\": S.Number")
-        expect(output).toContain("\"active\": S.Boolean")
+        expect(output).toContain("Schema.Struct(")
+        expect(output).toContain("\"name\": Schema.String")
+        expect(output).toContain("\"age\": Schema.Number")
+        expect(output).toContain("\"active\": Schema.Boolean")
       })
   )
 
   it.effect(
-    "generates S.Class when asStruct is false (default)",
+    "generates Schema.Class when asStruct is false (default)",
     () =>
       Effect.gen(function*() {
         const output = yield* runSchema("User", {
@@ -53,8 +53,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             name: { type: "string" }
           }
         } as JsonSchema.JsonSchema)
-        expect(output).toContain("S.Class<User>(\"User\")")
-        expect(output).toContain("\"name\": S.String")
+        expect(output).toContain("Schema.Class<User>(\"User\")")
+        expect(output).toContain("\"name\": Schema.String")
       })
   )
 
@@ -65,7 +65,7 @@ describe("JsonSchemaGen — Schema mode", () => {
         const output = yield* runSchema("Status", {
           enum: ["active", "inactive", "pending"]
         } as JsonSchema.JsonSchema)
-        expect(output).toContain("S.Literal(\"active\", \"inactive\", \"pending\")")
+        expect(output).toContain("Schema.Literal(\"active\", \"inactive\", \"pending\")")
       })
   )
 
@@ -85,7 +85,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           { asStruct: true }
         )
         expect(output).toContain(
-          "S.optionalWith(S.String, { nullable: true })"
+          "Schema.optionalWith(Schema.String, { nullable: true })"
         )
       })
   )
@@ -105,7 +105,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as unknown as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.NullOr(S.String)")
+        expect(output).toContain("Schema.NullOr(Schema.String)")
       })
   )
 
@@ -124,7 +124,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.Array(S.String)")
+        expect(output).toContain("Schema.Array(Schema.String)")
       })
   )
 
@@ -147,7 +147,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.NonEmptyArray(S.String)")
+        expect(output).toContain("Schema.NonEmptyArray(Schema.String)")
       })
   )
 
@@ -180,9 +180,9 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as JsonSchema.JsonSchema,
           context
         )
-        const output = yield* gen.generate("S")
-        expect(output).toContain("S.Class<Address>(\"Address\")")
-        expect(output).toContain("\"street\": S.String")
+        const output = yield* gen.generate("Schema")
+        expect(output).toContain("Schema.Class<Address>(\"Address\")")
+        expect(output).toContain("\"street\": Schema.String")
         expect(output).toContain("\"address\": Address")
       }).pipe(
         JsonSchemaGen.with,
@@ -210,10 +210,10 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.String.pipe(")
-        expect(output).toContain("S.minLength(3)")
-        expect(output).toContain("S.maxLength(10)")
-        expect(output).toContain("S.pattern(")
+        expect(output).toContain("Schema.String.pipe(")
+        expect(output).toContain("Schema.minLength(3)")
+        expect(output).toContain("Schema.maxLength(10)")
+        expect(output).toContain("Schema.pattern(")
       })
   )
 
@@ -236,9 +236,9 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.Number.pipe(")
-        expect(output).toContain("S.greaterThanOrEqualTo(0)")
-        expect(output).toContain("S.lessThanOrEqualTo(100)")
+        expect(output).toContain("Schema.Number.pipe(")
+        expect(output).toContain("Schema.greaterThanOrEqualTo(0)")
+        expect(output).toContain("Schema.lessThanOrEqualTo(100)")
       })
   )
 
@@ -249,9 +249,9 @@ describe("JsonSchemaGen — Schema mode", () => {
         const output = yield* runSchema("StringOrNumber", {
           anyOf: [{ type: "string" }, { type: "number" }]
         } as JsonSchema.JsonSchema)
-        expect(output).toContain("S.Union(")
-        expect(output).toContain("S.String")
-        expect(output).toContain("S.Number")
+        expect(output).toContain("Schema.Union(")
+        expect(output).toContain("Schema.String")
+        expect(output).toContain("Schema.Number")
       })
   )
 
@@ -283,8 +283,8 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as unknown as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("\"a\": S.String")
-        expect(output).toContain("\"b\": S.Number")
+        expect(output).toContain("\"a\": Schema.String")
+        expect(output).toContain("\"b\": Schema.Number")
       })
   )
 
@@ -303,7 +303,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as unknown as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.NullOr(S.String)")
+        expect(output).toContain("Schema.NullOr(Schema.String)")
       })
   )
 
@@ -323,7 +323,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           { asStruct: true }
         )
         expect(output).toContain(
-          "S.optionalWith(S.NullOr(S.String), { default: () => null })"
+          "Schema.optionalWith(Schema.NullOr(Schema.String), { default: () => null })"
         )
       })
   )
@@ -343,8 +343,8 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as unknown as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.propertySignature")
-        expect(output).toContain("S.withConstructorDefault")
+        expect(output).toContain("Schema.propertySignature")
+        expect(output).toContain("Schema.withConstructorDefault")
         expect(output).toContain("\"foo\"")
       })
   )
@@ -356,7 +356,7 @@ describe("JsonSchemaGen — Schema mode", () => {
         const output = yield* runSchema("NullVal", {
           type: "null"
         } as unknown as JsonSchema.JsonSchema)
-        expect(output).toContain("S.Null")
+        expect(output).toContain("Schema.Null")
       })
   )
 
@@ -367,9 +367,9 @@ describe("JsonSchemaGen — Schema mode", () => {
         const output = yield* runSchema("Dict", {
           type: "object"
         } as unknown as JsonSchema.JsonSchema)
-        expect(output).toContain("S.Record(")
-        expect(output).toContain("S.String")
-        expect(output).toContain("S.Unknown")
+        expect(output).toContain("Schema.Record(")
+        expect(output).toContain("Schema.String")
+        expect(output).toContain("Schema.Unknown")
       })
   )
 
@@ -380,7 +380,7 @@ describe("JsonSchemaGen — Schema mode", () => {
         const output = yield* runSchema("Active", {
           const: "active"
         } as unknown as JsonSchema.JsonSchema)
-        expect(output).toContain("S.Literal(\"active\")")
+        expect(output).toContain("Schema.Literal(\"active\")")
       })
   )
 
@@ -399,7 +399,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.instanceOf(globalThis.Blob)")
+        expect(output).toContain("Schema.instanceOf(globalThis.Blob)")
       })
   )
 
@@ -418,7 +418,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as unknown as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.Int")
+        expect(output).toContain("Schema.Int")
       })
   )
 
@@ -439,7 +439,7 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as unknown as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.NullOr(S.String)")
+        expect(output).toContain("Schema.NullOr(Schema.String)")
       })
   )
 
@@ -481,8 +481,8 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as unknown as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.greaterThan(0)")
-        expect(output).toContain("S.lessThan(100)")
+        expect(output).toContain("Schema.greaterThan(0)")
+        expect(output).toContain("Schema.lessThan(100)")
       })
   )
 
@@ -505,8 +505,8 @@ describe("JsonSchemaGen — Schema mode", () => {
           } as JsonSchema.JsonSchema,
           { asStruct: true }
         )
-        expect(output).toContain("S.Array(S.String)")
-        expect(output).toContain("S.maxItems(5)")
+        expect(output).toContain("Schema.Array(Schema.String)")
+        expect(output).toContain("Schema.maxItems(5)")
       })
   )
 })

@@ -35,6 +35,7 @@ interface ParsedOperation {
   readonly id: string
   readonly method: OpenAPISpecMethodName
   readonly description: Option.Option<string>
+  readonly tags: ReadonlyArray<string>
   readonly params?: string
   readonly paramsOptional: boolean
   readonly urlParams: ReadonlyArray<string>
@@ -47,6 +48,17 @@ interface ParsedOperation {
   readonly successSchemas: ReadonlyMap<string, string>
   readonly errorSchemas: ReadonlyMap<string, string>
   readonly voidSchemas: ReadonlySet<string>
+  readonly schemaNames: ReadonlySet<string>
+}
+
+export interface GenerateResult {
+  readonly modules: ReadonlyMap<string, TagModule>
+}
+
+export interface TagModule {
+  readonly source: string
+  readonly schemaNames: ReadonlySet<string>
+  readonly operations: ReadonlyArray<ParsedOperation>
 }
 
 export const make = Effect.gen(function*() {
@@ -103,11 +115,14 @@ export const make = Effect.gen(function*() {
             const id = operation.operationId
               ? camelize(operation.operationId!)
               : `${method.toUpperCase()}${path}`
+            const tags: Array<string> = operation.tags ?? ["_untagged"]
             const op: DeepMutable<ParsedOperation> & {
               description: Option.Option<string>
+              schemaNames: Set<string>
             } = {
               id,
               method,
+              tags,
               description: nonEmptyString(operation.description).pipe(
                 Option.orElse(() => nonEmptyString(operation.summary))
               ) as any,
@@ -120,7 +135,8 @@ export const make = Effect.gen(function*() {
               successSchemas: new Map(),
               errorSchemas: new Map(),
               voidSchemas: new Set(),
-              paramsOptional: true
+              paramsOptional: true,
+              schemaNames: new Set()
             }
             const schemaId = identifier(operation.operationId ?? path)
             const validParameters = operation.parameters?.filter(
@@ -216,6 +232,7 @@ export const make = Effect.gen(function*() {
                   } else if (statusMajorNumber < 4) {
                     op.successSchemas.set(statusLower, schemaName)
                   } else {
+                    gen.markAsError(schemaName)
                     op.errorSchemas.set(statusLower, schemaName)
                   }
                 }
@@ -227,16 +244,99 @@ export const make = Effect.gen(function*() {
             if (op.successSchemas.size === 0 && defaultSchema) {
               op.successSchemas.set("2xx", defaultSchema)
             }
+            if (op.params) op.schemaNames.add(op.params)
+            if (op.payload) op.schemaNames.add(op.payload)
+            for (const name of op.successSchemas.values()) op.schemaNames.add(name)
+            for (const name of op.errorSchemas.values()) op.schemaNames.add(name)
+            if (defaultSchema) op.schemaNames.add(defaultSchema)
             operations.push(op)
           })
 
       Object.entries(spec.paths).forEach(([path, methods]) => handlePath(path, methods))
 
       const transformer = yield* OpenApiTransformer
-      const schemas = yield* gen.generate("S")
-      return `${transformer.imports}\n\n${schemas}\n\n${transformer.toImplementation(options.name, operations)}\n\n${
-        transformer.toTypes(options.name, operations)
-      }`
+
+      const tagGroups = new Map<string, Array<ParsedOperation>>()
+      for (const op of operations) {
+        const tag = op.tags[0] ?? "_untagged"
+        let group = tagGroups.get(tag)
+        if (!group) {
+          group = []
+          tagGroups.set(tag, group)
+        }
+        group.push(op)
+      }
+
+      const tagSchemaNames = new Map<string, Set<string>>()
+      for (const [tag, ops] of tagGroups) {
+        const names = new Set<string>()
+        for (const op of ops) {
+          for (const name of op.schemaNames) {
+            names.add(name)
+          }
+        }
+        tagSchemaNames.set(tag, names)
+      }
+
+      const commonSchemaNames = new Set<string>()
+      const allSchemaNames = new Set<string>()
+      for (const names of tagSchemaNames.values()) {
+        for (const name of names) {
+          allSchemaNames.add(name)
+        }
+      }
+      for (const name of allSchemaNames) {
+        let count = 0
+        for (const names of tagSchemaNames.values()) {
+          if (names.has(name)) count++
+        }
+        if (count > 1) {
+          commonSchemaNames.add(name)
+        }
+      }
+
+      const modules = new Map<string, TagModule>()
+
+      if (commonSchemaNames.size > 0) {
+        const commonSchemas = yield* gen.generate("Schema", commonSchemaNames)
+        modules.set("_common", {
+          source: `${transformer.imports}\n\n${commonSchemas}`,
+          schemaNames: commonSchemaNames,
+          operations: []
+        })
+      }
+
+      for (const [tag, ops] of tagGroups) {
+        const tagOnlySchemas = new Set<string>()
+        const schemas = tagSchemaNames.get(tag)!
+        for (const name of schemas) {
+          if (!commonSchemaNames.has(name)) {
+            tagOnlySchemas.add(name)
+          }
+        }
+        const tagSchemas = yield* gen.generate("Schema", tagOnlySchemas)
+
+        const commonReexports = commonSchemaNames.size > 0
+          ? [...schemas].filter((n) => commonSchemaNames.has(n))
+          : []
+        const commonReexportLine = commonReexports.length > 0
+          ? `export { ${commonReexports.join(", ")} } from "./_common.js"`
+          : ""
+
+        const parts = [transformer.imports]
+        if (commonReexportLine) parts.push(commonReexportLine)
+        if (tagSchemas) parts.push(tagSchemas)
+        parts.push(transformer.toImplementation(options.name, ops))
+        parts.push(transformer.toTypes(options.name, ops))
+
+        modules.set(tag, {
+          source: parts.filter(Boolean).join("\n\n"),
+          schemaNames: schemas,
+          operations: ops
+        })
+      }
+
+      return { modules } as GenerateResult
     },
     JsonSchemaGen.with,
     (effect) => Effect.provide(effect, layerTransformerSchema)
@@ -273,42 +373,26 @@ export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
     operations: ReadonlyArray<ParsedOperation>
   ) =>
     `export interface ${name} {
-  readonly httpClient: HttpClient.HttpClient
-  ${operations.map((op) => operationToMethod(name, op)).join("\n  ")}
-}
+  ${operations.map((op) => operationToMethod(op)).join("\n  ")}
+}`
 
-${clientErrorSource(name)}`
-
-  const operationToMethod = (name: string, operation: ParsedOperation) => {
+  const operationToMethod = (operation: ParsedOperation) => {
     const args: Array<string> = []
     if (operation.pathIds.length > 0) {
       args.push(...operation.pathIds.map((id) => `${id}: string`))
     }
-    let options: Array<string> = []
-    if (operation.params && !operation.payload) {
-      args.push(
-        `options${operation.paramsOptional ? "?" : ""}: typeof ${operation.params}.Encoded${
-          operation.paramsOptional ? " | undefined" : ""
-        }`
-      )
-    } else if (operation.params) {
-      options.push(
-        `readonly params${operation.paramsOptional ? "?" : ""}: typeof ${operation.params}.Encoded${
-          operation.paramsOptional ? " | undefined" : ""
-        }`
+    const optionFields: Array<string> = []
+    if (operation.params) {
+      optionFields.push(
+        `readonly params${operation.paramsOptional ? "?" : ""}: typeof ${operation.params}.Encoded`
       )
     }
     if (operation.payload) {
-      const type = `typeof ${operation.payload}.Encoded`
-      if (!operation.params) {
-        args.push(`options: ${type}`)
-      } else {
-        options.push(`readonly payload: ${type}`)
-      }
+      optionFields.push(`readonly payload: typeof ${operation.payload}.Type`)
     }
-    if (options.length > 0) {
-      args.push(`options: { ${options.join("; ")} }`)
-    }
+    optionFields.push(`readonly headers?: Headers.Input`)
+    const hasRequired = !!operation.payload || (!!operation.params && !operation.paramsOptional)
+    args.push(`options${hasRequired ? "" : "?"}: { ${optionFields.join("; ")} }`)
     let success = "void"
     if (operation.successSchemas.size > 0) {
       success = Array.from(operation.successSchemas.values())
@@ -318,9 +402,7 @@ ${clientErrorSource(name)}`
     const errors = ["HttpClientError.HttpClientError", "ParseError"]
     if (operation.errorSchemas.size > 0) {
       errors.push(
-        ...Array.from(operation.errorSchemas.values()).map(
-          (schema) => `${name}Error<"${schema}", typeof ${schema}.Type>`
-        )
+        ...Array.from(operation.errorSchemas.values())
       )
     }
     return `${toComment(operation.description)}readonly "${operation.id}": (${
@@ -332,87 +414,75 @@ ${clientErrorSource(name)}`
     name: string,
     operations: ReadonlyArray<ParsedOperation>
   ) =>
-    `export const make = (
-  httpClient: HttpClient.HttpClient, 
-  options: {
-    readonly transformClient?: ((client: HttpClient.HttpClient) => Effect.Effect<HttpClient.HttpClient>) | undefined
-  } = {}
-): ${name} => {
-  ${commonSource}
-  const decodeSuccess =
-    <A, I, R>(schema: S.Schema<A, I, R>) =>
-    (response: HttpClientResponse.HttpClientResponse) =>
-      HttpClientResponse.schemaBodyJson(schema)(response)
-  const decodeError =
-    <const Tag extends string, A, I, R>(tag: Tag, schema: S.Schema<A, I, R>) =>
-    (response: HttpClientResponse.HttpClientResponse) =>
-      Effect.flatMap(
-        HttpClientResponse.schemaBodyJson(schema)(response),
-        (cause) => Effect.fail(${name}Error(tag, cause, response)),
-      )
-  return {
-    httpClient,
-    ${operations.map(operationToImpl).join(",\n  ")}
-  }
-}`
+    `${unexpectedStatusSource}
+
+export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
+  ${operations.map(operationToImpl).join(",\n  ")}
+})`
 
   const operationToImpl = (operation: ParsedOperation) => {
-    const args: Array<string> = [...operation.pathIds]
-    const hasOptions = operation.params || operation.payload
-    if (hasOptions) {
-      args.push("options")
-    }
-    const params = `${args.join(", ")}`
+    const args: Array<string> = [...operation.pathIds, "options"]
 
-    const pipeline: Array<string> = []
-
+    const requestPipeline: Array<string> = []
     if (operation.params) {
-      const varName = operation.payload ? "options.params?." : "options?."
       if (operation.urlParams.length > 0) {
         const props = operation.urlParams.map(
-          (param) => `"${param}": ${varName}["${param}"] as any`
+          (param) => `"${param}": options.params?.["${param}"] as any`
         )
-        pipeline.push(`HttpClientRequest.setUrlParams({ ${props.join(", ")} })`)
+        requestPipeline.push(`HttpClientRequest.setUrlParams({ ${props.join(", ")} })`)
       }
       if (operation.headers.length > 0) {
         const props = operation.headers.map(
-          (param) => `"${param}": ${varName}["${param}"] ?? undefined`
+          (param) => `"${param}": options.params?.["${param}"] ?? undefined`
         )
-        pipeline.push(`HttpClientRequest.setHeaders({ ${props.join(", ")} })`)
+        requestPipeline.push(`HttpClientRequest.setHeaders({ ${props.join(", ")} })`)
       }
     }
-
-    const payloadVarName = operation.params ? "options.payload" : "options"
-    if (operation.payloadFormData) {
-      pipeline.push(
-        `HttpClientRequest.bodyFormDataRecord(${payloadVarName} as any)`
-      )
-    } else if (operation.payload) {
-      pipeline.push(`HttpClientRequest.bodyUnsafeJson(${payloadVarName})`)
-    }
+    requestPipeline.push(`HttpClientRequest.setHeaders(options?.headers ?? {})`)
 
     const decodes: Array<string> = []
     const singleSuccessCode = operation.successSchemas.size === 1
     operation.successSchemas.forEach((schema, status) => {
       const statusCode = singleSuccessCode && status.startsWith("2") ? "2xx" : status
-      decodes.push(`"${statusCode}": decodeSuccess(${schema})`)
+      decodes.push(`"${statusCode}": HttpClientResponse.schemaBodyJson(${schema})`)
     })
     operation.errorSchemas.forEach((schema, status) => {
-      decodes.push(`"${status}": decodeError("${schema}", ${schema})`)
+      decodes.push(
+        `"${status}": (response) => HttpClientResponse.schemaBodyJson(${schema})(response).pipe(Effect.flatMap(Effect.fail))`
+      )
     })
     operation.voidSchemas.forEach((status) => {
       decodes.push(`"${status}": () => Effect.void`)
     })
     decodes.push(`orElse: unexpectedStatus`)
 
-    pipeline.push(`withResponse(HttpClientResponse.matchStatus({
+    const matchStatus = `HttpClientResponse.matchStatus({
       ${decodes.join(",\n      ")}
-    }))`)
+    })`
 
+    if (operation.payload) {
+      if (operation.payloadFormData) {
+        requestPipeline.push(`HttpClientRequest.bodyFormDataRecord(options.payload as any)`)
+      } else {
+        requestPipeline.push(`HttpClientRequest.schemaBodyJson(${operation.payload})(options.payload)`)
+      }
+      return (
+        `"${operation.id}": (${args.join(", ")}) =>\n    ` +
+        `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate}).pipe(\n      ` +
+        `${requestPipeline.join(",\n      ")},\n      ` +
+        `Effect.flatMap((request) => httpClient.execute(request)),\n      ` +
+        `Effect.flatMap(${matchStatus}),\n      ` +
+        `Effect.scoped,\n    )`
+      )
+    }
     return (
-      `"${operation.id}": (${params}) => ` +
-      `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate})` +
-      `.pipe(\n    ${pipeline.join(",\n    ")}\n  )`
+      `"${operation.id}": (${args.join(", ")}) =>\n    ` +
+      `httpClient.execute(\n      ` +
+      `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate}).pipe(\n        ` +
+      `${requestPipeline.join(",\n        ")},\n      ` +
+      `)\n    ).pipe(\n      ` +
+      `Effect.flatMap(${matchStatus}),\n      ` +
+      `Effect.scoped,\n    )`
     )
   }
 
@@ -420,12 +490,12 @@ ${clientErrorSource(name)}`
     imports: [
       "import type * as HttpClient from \"@effect/platform/HttpClient\"",
       "import * as HttpClientError from \"@effect/platform/HttpClientError\"",
+      "import type * as Headers from \"@effect/platform/Headers\"",
       "import * as HttpClientRequest from \"@effect/platform/HttpClientRequest\"",
       "import * as HttpClientResponse from \"@effect/platform/HttpClientResponse\"",
-      "import * as Data from \"effect/Data\"",
       "import * as Effect from \"effect/Effect\"",
       "import type { ParseError } from \"effect/ParseResult\"",
-      "import * as S from \"effect/Schema\""
+      "import * as Schema from \"effect/Schema\""
     ].join("\n"),
     toTypes: operationsToInterface,
     toImplementation: operationsToImpl
@@ -442,58 +512,16 @@ const processPath = (path: string) => {
   return { path: "`" + path + "`", ids } as const
 }
 
-const commonSource = `const unexpectedStatus = (response: HttpClientResponse.HttpClientResponse) =>
-    Effect.flatMap(
-      Effect.orElseSucceed(response.json, () => "Unexpected status code"),
-      (description) =>
-        Effect.fail(
-          new HttpClientError.ResponseError({
-            request: response.request,
-            response,
-            reason: "StatusCode",
-            description: typeof description === "string" ? description : JSON.stringify(description),
-          }),
-        ),
-    )
-  const withResponse: <A, E>(
-    f: (response: HttpClientResponse.HttpClientResponse) => Effect.Effect<A, E>,
-  ) => (
-    request: HttpClientRequest.HttpClientRequest,
-  ) => Effect.Effect<any, any> = options.transformClient
-    ? (f) => (request) =>
-        Effect.flatMap(
-          Effect.flatMap(options.transformClient!(httpClient), (client) =>
-            client.execute(request),
-          ),
-          f,
-        )
-    : (f) => (request) => Effect.flatMap(httpClient.execute(request), f)`
-
-const clientErrorSource = (
-  name: string
-) =>
-  `export interface ${name}Error<Tag extends string, E> {
-  readonly _tag: Tag
-  readonly request: HttpClientRequest.HttpClientRequest
-  readonly response: HttpClientResponse.HttpClientResponse
-  readonly cause: E
-}
-
-class ${name}ErrorImpl extends Data.Error<{
-  _tag: string
-  cause: any
-  request: HttpClientRequest.HttpClientRequest
-  response: HttpClientResponse.HttpClientResponse
-}> {}
-
-export const ${name}Error = <Tag extends string, E>(
-  tag: Tag,
-  cause: E,
-  response: HttpClientResponse.HttpClientResponse,
-): ${name}Error<Tag, E> =>
-  new ${name}ErrorImpl({
-    _tag: tag,
-    cause,
-    response,
-    request: response.request,
-  }) as any`
+const unexpectedStatusSource = `const unexpectedStatus = (response: HttpClientResponse.HttpClientResponse) =>
+  Effect.flatMap(
+    Effect.orElseSucceed(response.json, () => "Unexpected status code"),
+    (description) =>
+      Effect.fail(
+        new HttpClientError.ResponseError({
+          request: response.request,
+          response,
+          reason: "StatusCode",
+          description: typeof description === "string" ? description : JSON.stringify(description),
+        }),
+      ),
+  )`

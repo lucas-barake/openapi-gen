@@ -1,6 +1,6 @@
 import * as Option from "effect/Option"
 import { describe, expect, it } from "vitest"
-import { camelize, identifier, nonEmptyString, toComment } from "../src/Utils.js"
+import { camelize, identifier, nonEmptyString, toComment, toKebabCase } from "../src/Utils.js"
 
 describe("camelize", () => {
   it("converts snake_case", () => {
@@ -80,6 +80,44 @@ describe("nonEmptyString", () => {
 
   it("returns trimmed Some for valid string with surrounding whitespace", () => {
     expect(nonEmptyString("  hello  ")).toStrictEqual(Option.some("hello"))
+  })
+})
+
+describe("toKebabCase", () => {
+  it("converts spaces", () => {
+    expect(toKebabCase("User Management")).toBe("user-management")
+  })
+
+  it("converts camelCase", () => {
+    expect(toKebabCase("petStore")).toBe("pet-store")
+  })
+
+  it("converts PascalCase", () => {
+    expect(toKebabCase("UserManagement")).toBe("user-management")
+  })
+
+  it("passes through already-kebab", () => {
+    expect(toKebabCase("user-management")).toBe("user-management")
+  })
+
+  it("handles uppercase acronyms", () => {
+    expect(toKebabCase("API Keys")).toBe("api-keys")
+  })
+
+  it("handles numbers", () => {
+    expect(toKebabCase("v2Users")).toBe("v2-users")
+  })
+
+  it("replaces special chars", () => {
+    expect(toKebabCase("users/admin")).toBe("users-admin")
+  })
+
+  it("trims leading/trailing hyphens", () => {
+    expect(toKebabCase("--hello--")).toBe("hello")
+  })
+
+  it("returns empty for empty input", () => {
+    expect(toKebabCase("")).toBe("")
   })
 })
 
