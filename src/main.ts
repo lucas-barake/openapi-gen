@@ -28,15 +28,21 @@ const outdirOption = Options.text("outdir").pipe(
   Options.withDefault(".")
 )
 
+const extOption = Options.text("ext").pipe(
+  Options.withAlias("e"),
+  Options.withDescription("Import extension for generated files (.js, .ts, or empty)"),
+  Options.withDefault(".js")
+)
+
 const syncCommand = Command.make(
   "sync",
-  { spec: specOption, name: nameOption, outdir: outdirOption },
-  ({ spec, name, outdir }) =>
+  { spec: specOption, name: nameOption, outdir: outdirOption, ext: extOption },
+  ({ spec, name, outdir, ext }) =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
       const api = yield* OpenApi
-      const result = yield* api.generate(spec as any, { name })
+      const result = yield* api.generate(spec as any, { name, ext })
 
       yield* fs.makeDirectory(outdir, { recursive: true })
 
@@ -50,7 +56,7 @@ const syncCommand = Command.make(
 
         if (tag !== "_common") {
           barrelExports.push(
-            `export * as Generated${identifier(tag)}Api from "./${toKebabCase(tag)}.js"`
+            `export * as Generated${identifier(tag)}Api from "./${toKebabCase(tag)}${ext}"`
           )
         }
       }
