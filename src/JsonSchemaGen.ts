@@ -614,7 +614,7 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
     onTopLevel({ importName, schema, name, source, isClass, isError, description }) {
       const isObject = "properties" in schema
       if (isError && isObject) {
-        return `const ${name}Body = ${importName}.Struct(${source})\n\n${
+        return `export const ${name}Body = ${importName}.Struct(${source})\n\n${
           toComment(description)
         }export class ${name} extends ${importName}.TaggedError<${name}>()("${name}", ${name}Body) {}`
       }

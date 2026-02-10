@@ -49,6 +49,7 @@
     "@vitest/coverage-v8": "^3.2.4",
     "dprint": "^0.51.1",
     "effect": "^3.19.16",
+    "esbuild": "^0.27.3",
     "oxlint": "^1.42.0",
     "swagger2openapi": "^7.0.8",
     "tsup": "^8.4.0",

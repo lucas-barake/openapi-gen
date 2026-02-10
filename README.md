@@ -185,7 +185,7 @@ const CreatePetRequest = Schema.Struct({
 
 const CreatePet201 = Pet
 
-const CreatePet400Body = Schema.Struct({
+export const CreatePet400Body = Schema.Struct({
   "message": Schema.String
 })
 
