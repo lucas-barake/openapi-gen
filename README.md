@@ -23,13 +23,23 @@ pnpm dlx @lucas-barake/openapi-gen sync -s ./openapi.json -n MyApi -o ./src/gene
 
 ```bash
 openapigen sync --spec <file> [--name <name>] [--outdir <dir>]
+openapigen sync --url <url>   [--name <name>] [--outdir <dir>]
 ```
 
 | Flag             | Alias | Required | Default  | Description                                              |
 | ---------------- | ----- | -------- | -------- | -------------------------------------------------------- |
-| `--spec <file>`  | `-s`  | Yes      | —        | Path to the OpenAPI spec file (`.json`, `.yaml`, `.yml`) |
+| `--spec <file>`  | `-s`  | No*      | —        | Path to the OpenAPI spec file (`.json`, `.yaml`, `.yml`) |
+| `--url <url>`    | `-u`  | No*      | —        | URL to a remote OpenAPI spec (JSON or YAML)              |
 | `--name <name>`  | `-n`  | No       | `Client` | Name for the generated client interface                  |
 | `--outdir <dir>` | `-o`  | No       | `.`      | Output directory for generated files                     |
+
+\* Either `--spec` or `--url` is required (mutually exclusive).
+
+### Remote spec
+
+```bash
+pnpm dlx @lucas-barake/openapi-gen sync -u https://api.example.com/openapi.json -n MyApi -o ./src/generated
+```
 
 ### Supported input formats
 
