@@ -1,5 +1,11 @@
 # @lucas-barake/openapi-gen
 
+## 0.3.0
+
+### Minor Changes
+
+- [#5](https://github.com/lucas-barake/openapi-gen/pull/5) [`97f88ed`](https://github.com/lucas-barake/openapi-gen/commit/97f88edccd811a9f40a6bda871ee69f5a33de201) Thanks [@lucas-barake](https://github.com/lucas-barake)! - Add automatic branding for ID fields (nominal types)
+
 ## 0.2.0
 
 ### Minor Changes
