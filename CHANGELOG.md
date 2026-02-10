@@ -1,5 +1,11 @@
 # @lucas-barake/openapi-gen
 
+## 0.1.0
+
+### Minor Changes
+
+- [`4afda7a`](https://github.com/lucas-barake/openapi-gen/commit/4afda7a1ce6822272b47356a2b4f7e9c93aff7d5) Thanks [@lucas-barake](https://github.com/lucas-barake)! - Initial release
+
 ## 0.4.13
 
 ### Patch Changes
