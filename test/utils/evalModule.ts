@@ -2,10 +2,10 @@ import * as Sse from "@effect/experimental/Sse"
 import * as HttpClientError from "@effect/platform/HttpClientError"
 import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import * as HttpClientResponse from "@effect/platform/HttpClientResponse"
-import { transformSync } from "esbuild"
 import * as Effect from "effect/Effect"
 import * as Schema from "effect/Schema"
 import * as Stream from "effect/Stream"
+import { transformSync } from "esbuild"
 import type { GenerateResult } from "../../src/OpenApi.js"
 
 const deps: Record<string, unknown> = {
