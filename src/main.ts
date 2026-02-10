@@ -2,12 +2,17 @@ import * as CliConfig from "@effect/cli/CliConfig"
 import * as Command from "@effect/cli/Command"
 import * as Options from "@effect/cli/Options"
 import * as NodeContext from "@effect/platform-node/NodeContext"
+import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient"
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as FileSystem from "@effect/platform/FileSystem"
+import * as HttpClient from "@effect/platform/HttpClient"
+import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
 import * as Path from "@effect/platform/Path"
 import * as Console from "effect/Console"
 import * as Effect from "effect/Effect"
+import * as Either from "effect/Either"
 import * as Layer from "effect/Layer"
+import * as Yaml from "yaml"
 import { OpenApi } from "./OpenApi.js"
 import { identifier, toKebabCase } from "./Utils.js"
 
@@ -15,6 +20,25 @@ const specOption = Options.fileParse("spec").pipe(
   Options.withAlias("s"),
   Options.withDescription("The OpenAPI spec file")
 )
+
+const urlOption = Options.text("url").pipe(
+  Options.withAlias("u"),
+  Options.withDescription("URL to a remote OpenAPI spec (JSON or YAML)")
+)
+
+const specInput = Options.orElseEither(specOption, urlOption)
+
+const fetchSpec = (url: string) =>
+  Effect.gen(function*() {
+    const client = yield* HttpClient.HttpClient
+    const response = yield* client.execute(HttpClientRequest.get(url))
+    const text = yield* response.text
+
+    const isYaml = url.endsWith(".yaml") || url.endsWith(".yml") ||
+      response.headers["content-type"]?.includes("yaml")
+
+    return isYaml ? Yaml.parse(text) : JSON.parse(text)
+  }).pipe(Effect.scoped)
 
 const nameOption = Options.text("name").pipe(
   Options.withAlias("n"),
@@ -36,12 +60,18 @@ const extOption = Options.text("ext").pipe(
 
 const syncCommand = Command.make(
   "sync",
-  { spec: specOption, name: nameOption, outdir: outdirOption, ext: extOption },
-  ({ spec, name, outdir, ext }) =>
+  { specInput, name: nameOption, outdir: outdirOption, ext: extOption },
+  ({ specInput, name, outdir, ext }) =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
       const api = yield* OpenApi
+
+      const spec = yield* Either.match(specInput, {
+        onLeft: (parsed) => Effect.succeed(parsed),
+        onRight: (url) => fetchSpec(url as string)
+      })
+
       const result = yield* api.generate(spec as any, { name, ext })
 
       yield* fs.makeDirectory(outdir, { recursive: true })
@@ -79,6 +109,7 @@ export const run = Command.run(openapigen, {
 
 const Env = Layer.mergeAll(
   NodeContext.layer,
+  NodeHttpClient.layer,
   OpenApi.Live,
   CliConfig.layer({
     showBuiltIns: false

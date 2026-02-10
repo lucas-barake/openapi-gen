@@ -1,16 +1,14 @@
 import * as NodeContext from "@effect/platform-node/NodeContext"
 import * as FileSystem from "@effect/platform/FileSystem"
+import * as HttpClient from "@effect/platform/HttpClient"
+import * as HttpClientResponse from "@effect/platform/HttpClientResponse"
 import * as Path from "@effect/platform/Path"
 import { describe, expect, it } from "@effect/vitest"
 import * as Effect from "effect/Effect"
+import * as Exit from "effect/Exit"
 import * as Layer from "effect/Layer"
 import { run } from "../src/main.js"
 import { OpenApi } from "../src/OpenApi.js"
-
-const TestEnv = Layer.mergeAll(
-  NodeContext.layer,
-  OpenApi.Live
-)
 
 const petStoreSpec = {
   openapi: "3.0.0",
@@ -102,6 +100,27 @@ const petStoreSpec = {
     }
   }
 }
+
+const MockHttpClient = Layer.succeed(
+  HttpClient.HttpClient,
+  HttpClient.make((request) =>
+    Effect.succeed(
+      HttpClientResponse.fromWeb(
+        request,
+        new Response(JSON.stringify(petStoreSpec), {
+          status: 200,
+          headers: { "content-type": "application/json" }
+        })
+      )
+    )
+  )
+)
+
+const TestEnv = Layer.mergeAll(
+  NodeContext.layer,
+  OpenApi.Live,
+  MockHttpClient
+)
 
 describe("CLI integration", () => {
   it.scoped("sync generates per-tag files and barrel index", () =>
@@ -269,5 +288,81 @@ describe("CLI integration", () => {
 
       const tagA = yield* fs.readFileString(path.join(outDir, "tag-a.ts"))
       expect(tagA).toContain("export { Shared } from \"./_common.js\"")
+    }).pipe(Effect.provide(TestEnv)))
+
+  it.scoped("sync with --url fetches and generates from remote spec", () =>
+    Effect.gen(function*() {
+      const fs = yield* FileSystem.FileSystem
+      const path = yield* Path.Path
+
+      const tmpDir = yield* fs.makeTempDirectoryScoped()
+      const outDir = path.join(tmpDir, "generated")
+
+      yield* run([
+        "node",
+        "openapigen.js",
+        "sync",
+        "--url",
+        "http://test.local/spec.json",
+        "--name",
+        "PetStore",
+        "--outdir",
+        outDir
+      ])
+
+      const files = yield* fs.readDirectory(outDir)
+      expect(files).toContain("index.ts")
+      expect(files).toContain("pets.ts")
+      expect(files).toContain("users.ts")
+
+      const petsSource = yield* fs.readFileString(path.join(outDir, "pets.ts"))
+      expect(petsSource).toContain("export class Pet extends Schema.Class")
+      expect(petsSource).toContain("export const make")
+      expect(petsSource).toContain("export interface PetStore")
+    }).pipe(Effect.provide(TestEnv)))
+
+  it.scoped("sync fails when both --spec and --url are provided", () =>
+    Effect.gen(function*() {
+      const fs = yield* FileSystem.FileSystem
+      const path = yield* Path.Path
+
+      const tmpDir = yield* fs.makeTempDirectoryScoped()
+      const specPath = path.join(tmpDir, "spec.json")
+      const outDir = path.join(tmpDir, "generated")
+
+      yield* fs.writeFileString(specPath, JSON.stringify(petStoreSpec))
+
+      const exit = yield* run([
+        "node",
+        "openapigen.js",
+        "sync",
+        "--spec",
+        specPath,
+        "--url",
+        "http://test.local/spec.json",
+        "--outdir",
+        outDir
+      ]).pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit)).toBe(true)
+    }).pipe(Effect.provide(TestEnv)))
+
+  it.scoped("sync fails when neither --spec nor --url is provided", () =>
+    Effect.gen(function*() {
+      const fs = yield* FileSystem.FileSystem
+      const path = yield* Path.Path
+
+      const tmpDir = yield* fs.makeTempDirectoryScoped()
+      const outDir = path.join(tmpDir, "generated")
+
+      const exit = yield* run([
+        "node",
+        "openapigen.js",
+        "sync",
+        "--outdir",
+        outDir
+      ]).pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit)).toBe(true)
     }).pipe(Effect.provide(TestEnv)))
 })
