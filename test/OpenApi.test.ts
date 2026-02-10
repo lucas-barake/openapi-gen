@@ -218,7 +218,8 @@ describe("OpenApi", () => {
         )
 
         expect(output).toContain("GetUser404")
-        expect(output).toContain("HttpClientResponse.schemaBodyJson(GetUser404)")
+        expect(output).toContain("HttpClientResponse.schemaBodyJson(GetUser404Body)")
+        expect(output).toContain("new GetUser404(body)")
         expect(output).toContain("| GetUser404>")
       }).pipe(Effect.provide(OpenApi.Live)))
 
@@ -262,9 +263,141 @@ describe("OpenApi", () => {
           )
         )
 
+        expect(output).toContain("const GetUser404Body = Schema.Struct(")
         expect(output).toContain("Schema.TaggedError<GetUser404>()(\"GetUser404\"")
         expect(output).not.toContain("Schema.Class<GetUser404>")
         expect(output).not.toContain("Data.Error")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("error schema generates body struct for decoding", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/users/{userId}": {
+                get: {
+                  operationId: "getUser",
+                  parameters: [
+                    { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                  ],
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { id: { type: "string" } } }
+                        }
+                      }
+                    },
+                    "404": {
+                      description: "Not found",
+                      content: {
+                        "application/json": {
+                          schema: {
+                            type: "object",
+                            properties: { message: { type: "string" } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain("const GetUser404Body = Schema.Struct(")
+        expect(output).toContain("Schema.TaggedError<GetUser404>()(\"GetUser404\", GetUser404Body)")
+        expect(output).toContain("schemaBodyJson(GetUser404Body)")
+        expect(output).toContain("new GetUser404(body)")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("error schema body struct is NOT exported", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/users/{userId}": {
+                get: {
+                  operationId: "getUser",
+                  parameters: [
+                    { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                  ],
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { id: { type: "string" } } }
+                        }
+                      }
+                    },
+                    "404": {
+                      description: "Not found",
+                      content: {
+                        "application/json": {
+                          schema: {
+                            type: "object",
+                            properties: { message: { type: "string" } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain("const GetUser404Body")
+        expect(output).not.toContain("export const GetUser404Body")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("non-object error schemas still work", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/users/{userId}": {
+                get: {
+                  operationId: "getUser",
+                  parameters: [
+                    { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                  ],
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { id: { type: "string" } } }
+                        }
+                      }
+                    },
+                    "400": {
+                      description: "Bad request",
+                      content: {
+                        "application/json": {
+                          schema: { type: "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain("GetUser400")
+        expect(output).not.toContain("GetUser400Body")
       }).pipe(Effect.provide(OpenApi.Live)))
 
     it.effect("void response (no content)", () =>

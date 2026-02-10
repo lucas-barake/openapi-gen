@@ -47,6 +47,7 @@ interface ParsedOperation {
   readonly pathTemplate: string
   readonly successSchemas: ReadonlyMap<string, string>
   readonly errorSchemas: ReadonlyMap<string, string>
+  readonly objectErrorSchemas: ReadonlySet<string>
   readonly voidSchemas: ReadonlySet<string>
   readonly schemaNames: ReadonlySet<string>
   readonly streamSchema?: string
@@ -136,6 +137,7 @@ export const make = Effect.gen(function*() {
               payloadFormData: false,
               successSchemas: new Map(),
               errorSchemas: new Map(),
+              objectErrorSchemas: new Set(),
               voidSchemas: new Set(),
               paramsOptional: true,
               schemaNames: new Set()
@@ -236,6 +238,9 @@ export const make = Effect.gen(function*() {
                   } else {
                     gen.markAsError(schemaName)
                     op.errorSchemas.set(statusLower, schemaName)
+                    if ("properties" in response.content["application/json"].schema) {
+                      op.objectErrorSchemas.add(schemaName)
+                    }
                   }
                 }
                 const eventStreamContent = (response.content as any)?.["text/event-stream"]
@@ -495,9 +500,15 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
       decodes.push(`"${statusCode}": HttpClientResponse.schemaBodyJson(${schema})`)
     })
     operation.errorSchemas.forEach((schema, status) => {
-      decodes.push(
-        `"${status}": (response) => HttpClientResponse.schemaBodyJson(${schema})(response).pipe(Effect.flatMap(Effect.fail))`
-      )
+      if (operation.objectErrorSchemas.has(schema)) {
+        decodes.push(
+          `"${status}": (response) => HttpClientResponse.schemaBodyJson(${schema}Body)(response).pipe(Effect.map((body) => new ${schema}(body)), Effect.flatMap(Effect.fail))`
+        )
+      } else {
+        decodes.push(
+          `"${status}": (response) => HttpClientResponse.schemaBodyJson(${schema})(response).pipe(Effect.flatMap(Effect.fail))`
+        )
+      }
     })
     operation.voidSchemas.forEach((status) => {
       decodes.push(`"${status}": () => Effect.void`)

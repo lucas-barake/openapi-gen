@@ -160,9 +160,11 @@ const CreatePetRequest = Schema.Struct({
 
 const CreatePet201 = Pet
 
-export class CreatePet400 extends Schema.TaggedError<CreatePet400>()("CreatePet400", {
+const CreatePet400Body = Schema.Struct({
   "message": Schema.String
-}) {}
+})
+
+export class CreatePet400 extends Schema.TaggedError<CreatePet400>()("CreatePet400", CreatePet400Body) {}
 
 const unexpectedStatus = (response: HttpClientResponse.HttpClientResponse) =>
   Effect.flatMap(
@@ -204,7 +206,8 @@ export const make = (httpClient: HttpClient.HttpClient): PetStoreClient => ({
       Effect.flatMap(HttpClientResponse.matchStatus({
         "201": HttpClientResponse.schemaBodyJson(CreatePet201),
         "400": (response) =>
-          HttpClientResponse.schemaBodyJson(CreatePet400)(response).pipe(
+          HttpClientResponse.schemaBodyJson(CreatePet400Body)(response).pipe(
+            Effect.map((body) => new CreatePet400(body)),
             Effect.flatMap(Effect.fail)
           ),
         orElse: unexpectedStatus
