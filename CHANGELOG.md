@@ -1,5 +1,11 @@
 # @lucas-barake/openapi-gen
 
+## 0.2.0
+
+### Minor Changes
+
+- [#3](https://github.com/lucas-barake/openapi-gen/pull/3) [`1c7e9c2`](https://github.com/lucas-barake/openapi-gen/commit/1c7e9c25952a4f7136deb391d32e3944814d7b25) Thanks [@lucas-barake](https://github.com/lucas-barake)! - Add configurable import extension (--ext flag), CLI integration tests, SSE streaming support, and fix \_common.ts filename preservation
+
 ## 0.1.0
 
 ### Minor Changes
