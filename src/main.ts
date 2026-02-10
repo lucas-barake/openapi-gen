@@ -28,29 +28,36 @@ const outdirOption = Options.text("outdir").pipe(
   Options.withDefault(".")
 )
 
+const extOption = Options.text("ext").pipe(
+  Options.withAlias("e"),
+  Options.withDescription("Import extension for generated files (.js, .ts, or empty)"),
+  Options.withDefault(".js")
+)
+
 const syncCommand = Command.make(
   "sync",
-  { spec: specOption, name: nameOption, outdir: outdirOption },
-  ({ spec, name, outdir }) =>
+  { spec: specOption, name: nameOption, outdir: outdirOption, ext: extOption },
+  ({ spec, name, outdir, ext }) =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
       const api = yield* OpenApi
-      const result = yield* api.generate(spec as any, { name })
+      const result = yield* api.generate(spec as any, { name, ext })
 
       yield* fs.makeDirectory(outdir, { recursive: true })
 
       const barrelExports: Array<string> = []
 
       for (const [tag, mod] of result.modules) {
-        const filename = `${toKebabCase(tag)}.ts`
+        const basename = tag === "_common" ? "_common" : toKebabCase(tag)
+        const filename = `${basename}.ts`
         const fullPath = path.join(outdir, filename)
         yield* fs.writeFileString(fullPath, mod.source)
         yield* Console.log(`[generated] ${filename}`)
 
         if (tag !== "_common") {
           barrelExports.push(
-            `export * as Generated${identifier(tag)}Api from "./${toKebabCase(tag)}.js"`
+            `export * as Generated${identifier(tag)}Api from "./${basename}${ext}"`
           )
         }
       }
@@ -61,11 +68,11 @@ const syncCommand = Command.make(
     })
 ).pipe(Command.withDescription("Generate typed client from an OpenAPI spec"))
 
-const openapigen = Command.make("openapigen").pipe(
+export const openapigen = Command.make("openapigen").pipe(
   Command.withSubcommands([syncCommand])
 )
 
-const run = Command.run(openapigen, {
+export const run = Command.run(openapigen, {
   name: "openapigen",
   version: "0.0.0"
 })

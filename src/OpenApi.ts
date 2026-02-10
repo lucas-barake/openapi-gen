@@ -86,6 +86,7 @@ export const make = Effect.gen(function*() {
       spec: OpenAPISpec,
       options: {
         readonly name: string
+        readonly ext?: string
       }
     ) {
       if (isV2(spec)) {
@@ -331,7 +332,7 @@ export const make = Effect.gen(function*() {
           ? [...schemas].filter((n) => commonSchemaNames.has(n))
           : []
         const commonReexportLine = commonReexports.length > 0
-          ? `export { ${commonReexports.join(", ")} } from "./_common.js"`
+          ? `export { ${commonReexports.join(", ")} } from "./_common${options.ext ?? ".js"}"`
           : ""
 
         const hasStreaming = ops.some((op) => !!op.streamSchema)
