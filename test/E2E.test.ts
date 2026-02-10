@@ -556,6 +556,112 @@ describe("E2E", () => {
           yield* client.uploadFile({ payload: { name: "test.txt" } })
         })
       ))
+
+    it.effect("multipart form data with path parameters", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            baseSpec({
+              "/users/{userId}/avatar": {
+                post: {
+                  operationId: "uploadAvatar",
+                  parameters: [
+                    { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                  ],
+                  requestBody: {
+                    content: {
+                      "multipart/form-data": {
+                        schema: {
+                          type: "object",
+                          properties: {
+                            file: { type: "string", format: "binary" }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { url: { type: "string" } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            })
+          )
+
+          const mod = evalGenerated(result)
+          const { client, requests } = mockHttpClientWithCapture([
+            {
+              method: "POST",
+              path: "/users/user-1/avatar",
+              status: 200,
+              body: { url: "https://example.com/avatar.png" }
+            }
+          ])
+          const data = yield* mod.make(client).uploadAvatar("user-1", { payload: { file: "data" } })
+          expect(data).toEqual({ url: "https://example.com/avatar.png" })
+          expect(requests[0].url.pathname).toBe("/users/user-1/avatar")
+        })
+      ))
+
+    it.effect("multipart form data with path and query parameters", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            baseSpec({
+              "/users/{userId}/documents": {
+                post: {
+                  operationId: "uploadDocument",
+                  parameters: [
+                    { name: "userId", in: "path", required: true, schema: { type: "string" } },
+                    { name: "overwrite", in: "query", required: false, schema: { type: "boolean" } }
+                  ],
+                  requestBody: {
+                    content: {
+                      "multipart/form-data": {
+                        schema: {
+                          type: "object",
+                          properties: {
+                            file: { type: "string", format: "binary" }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { id: { type: "string" } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            })
+          )
+
+          const mod = evalGenerated(result)
+          const { client, requests } = mockHttpClientWithCapture([
+            { method: "POST", path: "/users/user-1/documents", status: 200, body: { id: "doc-1" } }
+          ])
+          const data = yield* mod.make(client).uploadDocument("user-1", {
+            params: { overwrite: true },
+            payload: { file: "data" }
+          })
+          expect(data).toEqual({ id: "doc-1" })
+          expect(requests[0].url.pathname).toBe("/users/user-1/documents")
+          expect(requests[0].url.searchParams.get("overwrite")).toBe("true")
+        })
+      ))
   })
 
   describe("response handling", () => {
@@ -681,6 +787,73 @@ describe("E2E", () => {
           )
           const data = yield* client.createItem({ payload: { name: "Widget" } })
           expect(data).toEqual({ id: "item-1" })
+        })
+      ))
+
+    it.effect("multiple success status codes with different schemas", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            baseSpec({
+              "/things": {
+                post: {
+                  operationId: "upsertThing",
+                  requestBody: {
+                    content: {
+                      "application/json": {
+                        schema: {
+                          type: "object",
+                          properties: { name: { type: "string" } }
+                        }
+                      }
+                    }
+                  },
+                  responses: {
+                    "200": {
+                      description: "Already exists",
+                      content: {
+                        "application/json": {
+                          schema: {
+                            type: "object",
+                            properties: { id: { type: "string" }, existed: { type: "boolean" } }
+                          }
+                        }
+                      }
+                    },
+                    "201": {
+                      description: "Created",
+                      content: {
+                        "application/json": {
+                          schema: {
+                            type: "object",
+                            properties: { id: { type: "string" }, created: { type: "boolean" } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            })
+          )
+
+          const mod = evalGenerated(result)
+
+          const client200 = mod.make(
+            mockHttpClient([
+              { method: "POST", path: "/things", status: 200, body: { id: "1", existed: true } }
+            ])
+          )
+          const data200 = yield* client200.upsertThing({ payload: { name: "Widget" } })
+          expect(data200).toEqual({ id: "1", existed: true })
+
+          const client201 = mod.make(
+            mockHttpClient([
+              { method: "POST", path: "/things", status: 201, body: { id: "2", created: true } }
+            ])
+          )
+          const data201 = yield* client201.upsertThing({ payload: { name: "Widget" } })
+          expect(data201).toEqual({ id: "2", created: true })
         })
       ))
   })
@@ -878,6 +1051,197 @@ describe("E2E", () => {
           const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
           expect(error).toBeInstanceOf(HttpClientError.ResponseError)
           expect(error.reason).toBe("StatusCode")
+        })
+      ))
+
+    it.effect("$ref error schema in single-tag context produces TaggedError", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            specWithComponents(
+              {
+                "/users/{userId}": {
+                  get: {
+                    operationId: "getUser",
+                    parameters: [
+                      { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                    ],
+                    responses: {
+                      "200": {
+                        description: "OK",
+                        content: {
+                          "application/json": {
+                            schema: { type: "object", properties: { id: { type: "string" } } }
+                          }
+                        }
+                      },
+                      "404": {
+                        description: "Not found",
+                        content: {
+                          "application/json": {
+                            schema: { $ref: "#/components/schemas/NotFoundError" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                schemas: {
+                  NotFoundError: {
+                    type: "object",
+                    required: ["message"],
+                    properties: { message: { type: "string" } }
+                  }
+                }
+              }
+            )
+          )
+
+          const mod = evalGenerated(result)
+          const client = mod.make(
+            mockHttpClient([
+              { method: "GET", path: "/users/123", status: 404, body: { message: "User not found" } }
+            ])
+          )
+          const exit = yield* client.getUser("123").pipe(Effect.exit)
+          expect(exit._tag).toBe("Failure")
+          if (exit._tag !== "Failure") return
+          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          expect(error._tag).toBe("NotFoundError")
+          expect(error.message).toBe("User not found")
+        })
+      ))
+
+    it.effect("allOf error schema produces TaggedError", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            specWithComponents(
+              {
+                "/users/{userId}": {
+                  get: {
+                    operationId: "findUser",
+                    parameters: [
+                      { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                    ],
+                    responses: {
+                      "200": {
+                        description: "OK",
+                        content: {
+                          "application/json": {
+                            schema: { type: "object", properties: { id: { type: "string" } } }
+                          }
+                        }
+                      },
+                      "400": {
+                        description: "Bad request",
+                        content: {
+                          "application/json": {
+                            schema: {
+                              allOf: [
+                                { $ref: "#/components/schemas/BaseError" },
+                                {
+                                  type: "object",
+                                  properties: { details: { type: "string" } }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                schemas: {
+                  BaseError: {
+                    type: "object",
+                    required: ["message"],
+                    properties: { message: { type: "string" } }
+                  }
+                }
+              }
+            )
+          )
+
+          const mod = evalGenerated(result)
+          const client = mod.make(
+            mockHttpClient([
+              { method: "GET", path: "/users/123", status: 400, body: { message: "Invalid", details: "Bad ID" } }
+            ])
+          )
+          const exit = yield* client.findUser("123").pipe(Effect.exit)
+          expect(exit._tag).toBe("Failure")
+          if (exit._tag !== "Failure") return
+          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          expect(error._tag).toBe("FindUser400")
+          expect(error.message).toBe("Invalid")
+          expect(error.details).toBe("Bad ID")
+        })
+      ))
+
+    it.effect("$ref at response level for error responses", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            specWithComponents(
+              {
+                "/users/{userId}": {
+                  get: {
+                    operationId: "lookupUser",
+                    parameters: [
+                      { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                    ],
+                    responses: {
+                      "200": {
+                        description: "OK",
+                        content: {
+                          "application/json": {
+                            schema: { type: "object", properties: { id: { type: "string" } } }
+                          }
+                        }
+                      },
+                      "404": {
+                        $ref: "#/components/responses/NotFound"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                responses: {
+                  NotFound: {
+                    description: "Not found",
+                    content: {
+                      "application/json": {
+                        schema: {
+                          type: "object",
+                          required: ["message"],
+                          properties: { message: { type: "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            )
+          )
+
+          const mod = evalGenerated(result)
+          const client = mod.make(
+            mockHttpClient([
+              { method: "GET", path: "/users/123", status: 404, body: { message: "Not found" } }
+            ])
+          )
+          const exit = yield* client.lookupUser("123").pipe(Effect.exit)
+          expect(exit._tag).toBe("Failure")
+          if (exit._tag !== "Failure") return
+          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          expect(error._tag).toBe("LookupUser404")
+          expect(error.message).toBe("Not found")
         })
       ))
   })
@@ -1233,6 +1597,64 @@ describe("E2E", () => {
           )
           const data = yield* client.getAnything()
           expect(data).toEqual({ items: [1, "two", true] })
+        })
+      ))
+
+    it.effect("$ref request body schema", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            specWithComponents(
+              {
+                "/pets": {
+                  post: {
+                    operationId: "createPet",
+                    requestBody: {
+                      content: {
+                        "application/json": {
+                          schema: { $ref: "#/components/schemas/CreatePetPayload" }
+                        }
+                      }
+                    },
+                    responses: {
+                      "201": {
+                        description: "Created",
+                        content: {
+                          "application/json": {
+                            schema: {
+                              type: "object",
+                              properties: { id: { type: "string" }, name: { type: "string" } }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                schemas: {
+                  CreatePetPayload: {
+                    type: "object",
+                    required: ["name"],
+                    properties: {
+                      name: { type: "string" },
+                      tag: { type: "string" }
+                    }
+                  }
+                }
+              }
+            )
+          )
+
+          const mod = evalGenerated(result)
+          const client = mod.make(
+            mockHttpClient([
+              { method: "POST", path: "/pets", status: 201, body: { id: "pet-1", name: "Fido" } }
+            ])
+          )
+          const data = yield* client.createPet({ payload: { name: "Fido" } })
+          expect(data).toEqual({ id: "pet-1", name: "Fido" })
         })
       ))
   })

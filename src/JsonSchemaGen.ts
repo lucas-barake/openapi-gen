@@ -138,6 +138,13 @@ const make = Effect.gen(function*() {
     if ("$ref" in root) {
       addRefs(root, undefined)
       return identifier(root.$ref.split("/").pop()!)
+    } else if ("allOf" in root) {
+      const resolved = resolveAllOf(root, { ...root, ...context })
+      addRefs(resolved, "properties" in resolved ? name : undefined)
+      store.set(name, resolved)
+      if (!asStruct) {
+        classes.add(name)
+      }
     } else {
       addRefs(root, "properties" in root ? name : undefined)
       store.set(name, root)
