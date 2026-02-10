@@ -1,5 +1,11 @@
 # @lucas-barake/openapi-gen
 
+## 0.4.1
+
+### Patch Changes
+
+- [#14](https://github.com/lucas-barake/openapi-gen/pull/14) [`19c4c0f`](https://github.com/lucas-barake/openapi-gen/commit/19c4c0f918c9579afc9095d04a5012a8895726ae) Thanks [@lucas-barake](https://github.com/lucas-barake)! - fix multipart form data and $ref error schema code generation
+
 ## 0.4.0
 
 ### Minor Changes
