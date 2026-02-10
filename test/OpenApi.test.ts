@@ -428,6 +428,135 @@ describe("OpenApi", () => {
         expect(output).toContain("Effect.void")
       }).pipe(Effect.provide(OpenApi.Live)))
 
+    it.effect("bodyless 4xx errors should NOT produce Effect.void", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/users/{userId}": {
+                delete: {
+                  operationId: "deleteUser",
+                  parameters: [
+                    { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                  ],
+                  responses: {
+                    "204": {
+                      description: "No Content"
+                    },
+                    "401": {
+                      description: "Unauthorized"
+                    },
+                    "403": {
+                      description: "Forbidden"
+                    }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain(`"204": () => Effect.void`)
+        expect(output).not.toContain(`"401": () => Effect.void`)
+        expect(output).not.toContain(`"403": () => Effect.void`)
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("bodyless 5xx errors should NOT produce Effect.void", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/health": {
+                get: {
+                  operationId: "healthCheck",
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { status: { type: "string" } } }
+                        }
+                      }
+                    },
+                    "503": {
+                      description: "Service Unavailable"
+                    }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).not.toContain(`"503": () => Effect.void`)
+        expect(output).toContain("HttpClientResponse.schemaBodyJson(HealthCheck200)")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("mixed — some errors have bodies, some don't", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/orders": {
+                post: {
+                  operationId: "createOrder",
+                  requestBody: {
+                    content: {
+                      "application/json": {
+                        schema: {
+                          type: "object",
+                          properties: { item: { type: "string" } }
+                        }
+                      }
+                    }
+                  },
+                  responses: {
+                    "201": {
+                      description: "Created",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { id: { type: "string" } } }
+                        }
+                      }
+                    },
+                    "400": {
+                      description: "Bad request",
+                      content: {
+                        "application/json": {
+                          schema: {
+                            type: "object",
+                            properties: { message: { type: "string" } }
+                          }
+                        }
+                      }
+                    },
+                    "401": {
+                      description: "Unauthorized"
+                    },
+                    "500": {
+                      description: "Internal Server Error"
+                    }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain("CreateOrder400")
+        expect(output).toContain("schemaBodyJson(CreateOrder400Body)")
+        expect(output).toContain("Effect.flatMap(Effect.fail)")
+        expect(output).not.toContain(`"401": () => Effect.void`)
+        expect(output).not.toContain(`"500": () => Effect.void`)
+        expect(output).toContain("HttpClientResponse.schemaBodyJson(CreateOrder201)")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
     it.effect("header parameters", () =>
       Effect.gen(function*() {
         const api = yield* OpenApi
