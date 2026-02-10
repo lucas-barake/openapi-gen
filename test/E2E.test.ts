@@ -5,6 +5,7 @@ import * as Chunk from "effect/Chunk"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import * as Stream from "effect/Stream"
+import type { GenerateResult } from "../src/OpenApi.js"
 import { OpenApi } from "../src/OpenApi.js"
 import { evalGenerated } from "./utils/evalModule.js"
 import { mockHttpClient, mockHttpClientWithCapture, mockSseClient } from "./utils/mockHttp.js"
@@ -27,12 +28,19 @@ const specWithComponents = (
     components
   }) as any
 
+const generate = (spec: any, opts?: { readonly name?: string }): Effect.Effect<GenerateResult> =>
+  Effect.gen(function*() {
+    const api = yield* OpenApi
+    return yield* api.generate(spec, { name: opts?.name ?? "Client" })
+  }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<GenerateResult>
+
+const asAny = (fn: () => Effect.Effect<void, any, any>): Effect.Effect<void> => fn() as Effect.Effect<void>
+
 describe("E2E", () => {
   describe("basic operations", () => {
-    it.effect("GET with JSON response", () =>
+    it.effect("GET with JSON response", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets": {
               get: {
@@ -58,8 +66,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -70,12 +77,11 @@ describe("E2E", () => {
         )
         const data = yield* client.listPets()
         expect(data).toEqual([{ id: "1", name: "Fido" }])
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("POST with request body", () =>
+    it.effect("POST with request body", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets": {
               post: {
@@ -112,8 +118,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -124,12 +129,11 @@ describe("E2E", () => {
         )
         const data = yield* client.createPet({ payload: { name: "Buddy" } })
         expect(data).toEqual({ id: "new-1", name: "Buddy" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("path parameters", () =>
+    it.effect("path parameters", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets/{petId}": {
               get: {
@@ -155,8 +159,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -167,12 +170,11 @@ describe("E2E", () => {
         )
         const data = yield* client.getPet("abc-123")
         expect(data).toEqual({ id: "abc-123", name: "Fido" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("DELETE method (del mapping)", () =>
+    it.effect("DELETE method (del mapping)", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets/{petId}": {
               delete: {
@@ -185,8 +187,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -197,12 +198,11 @@ describe("E2E", () => {
         )
         const data = yield* client.deletePet("123")
         expect(data).toBeUndefined()
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("PUT method", () =>
+    it.effect("PUT method", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets/{petId}": {
               put: {
@@ -236,8 +236,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -248,12 +247,11 @@ describe("E2E", () => {
         )
         const data = yield* client.updatePet("1", { payload: { name: "Rex" } })
         expect(data).toEqual({ id: "1", name: "Rex" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("PATCH method", () =>
+    it.effect("PATCH method", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets/{petId}": {
               patch: {
@@ -286,8 +284,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -298,12 +295,11 @@ describe("E2E", () => {
         )
         const data = yield* client.patchPet("1", { payload: { name: "Rex" } })
         expect(data).toEqual({ id: "1", name: "Rex" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("multiple path parameters", () =>
+    it.effect("multiple path parameters", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/orgs/{orgId}/repos/{repoId}": {
               get: {
@@ -327,8 +323,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -339,14 +334,13 @@ describe("E2E", () => {
         )
         const data = yield* client.getRepo("org-1", "repo-1")
         expect(data).toEqual({ name: "my-repo" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
   })
 
   describe("request features", () => {
-    it.effect("query parameters", () =>
+    it.effect("query parameters", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets": {
               get: {
@@ -367,8 +361,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -379,12 +372,11 @@ describe("E2E", () => {
         expect(data).toEqual(["Fido"])
         expect(requests[0].url.searchParams.get("page")).toBe("1")
         expect(requests[0].url.searchParams.get("limit")).toBe("10")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("header parameters", () =>
+    it.effect("header parameters", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets": {
               get: {
@@ -404,8 +396,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -417,12 +408,11 @@ describe("E2E", () => {
         })
         expect(data).toEqual(["Fido"])
         expect(requests[0].request.headers["x-api-key"]).toBe("secret-key")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("custom headers via options.headers", () =>
+    it.effect("custom headers via options.headers", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets": {
               get: {
@@ -439,8 +429,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -452,12 +441,11 @@ describe("E2E", () => {
         })
         expect(data).toEqual(["Fido"])
         expect(requests[0].request.headers.authorization).toBe("Bearer token123")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("nested object query parameters (bracket notation)", () =>
+    it.effect("nested object query parameters (bracket notation)", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets": {
               get: {
@@ -487,8 +475,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -501,12 +488,11 @@ describe("E2E", () => {
         expect(data).toEqual(["Fido"])
         expect(requests[0].url.searchParams.get("filter[status]")).toBe("active")
         expect(requests[0].url.searchParams.get("filter[type]")).toBe("dog")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect.fails("multipart form data — bodyFormDataRecord returns HttpClientRequest not Effect (generator bug)", () =>
+    it.effect.fails("multipart form data — bodyFormDataRecord returns HttpClientRequest not Effect (generator bug)", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/upload": {
               post: {
@@ -535,8 +521,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -546,14 +531,13 @@ describe("E2E", () => {
           ])
         )
         yield* client.uploadFile({ payload: { name: "test.txt" } })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
   })
 
   describe("response handling", () => {
-    it.effect("void response (204 No Content)", () =>
+    it.effect("void response (204 No Content)", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets/{petId}": {
               delete: {
@@ -566,8 +550,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -578,12 +561,11 @@ describe("E2E", () => {
         )
         const data = yield* client.deletePet("123")
         expect(data).toBeUndefined()
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("default response as success fallback", () =>
+    it.effect("default response as success fallback", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/info": {
               get: {
@@ -603,8 +585,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -615,12 +596,11 @@ describe("E2E", () => {
         )
         const data = yield* client.getInfo()
         expect(data).toEqual({ message: "hello" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("multiple success status codes", () =>
+    it.effect("multiple success status codes", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/items": {
               post: {
@@ -661,8 +641,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -673,14 +652,13 @@ describe("E2E", () => {
         )
         const data = yield* client.createItem({ payload: { name: "Widget" } })
         expect(data).toEqual({ id: "item-1" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
   })
 
   describe("error handling", () => {
-    it.effect("4xx error response with object body produces TaggedError", () =>
+    it.effect("4xx error response with object body produces TaggedError", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets/{petId}": {
               get: {
@@ -717,8 +695,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -739,12 +716,11 @@ describe("E2E", () => {
         expect(error._tag).toBe("GetPet404")
         expect(error.message).toBe("Not found")
         expect(error.code).toBe("PET_NOT_FOUND")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("4xx error with non-object body", () =>
+    it.effect("4xx error with non-object body", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/status": {
               get: {
@@ -772,8 +748,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -787,12 +762,11 @@ describe("E2E", () => {
         if (exit._tag !== "Failure") return
         const error = Option.getOrThrow(Cause.failureOption(exit.cause))
         expect(error).toBe("Bad request message")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("bodyless 4xx falls through to unexpectedStatus", () =>
+    it.effect("bodyless 4xx falls through to unexpectedStatus", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets/{petId}": {
               delete: {
@@ -807,8 +781,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -832,12 +805,11 @@ describe("E2E", () => {
         )
         const data204 = yield* client204.deletePet("1")
         expect(data204).toBeUndefined()
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("unexpected status code triggers unexpectedStatus", () =>
+    it.effect("unexpected status code triggers unexpectedStatus", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets": {
               get: {
@@ -854,8 +826,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
@@ -870,14 +841,13 @@ describe("E2E", () => {
         const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
         expect(error).toBeInstanceOf(HttpClientError.ResponseError)
         expect(error.reason).toBe("StatusCode")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
   })
 
   describe("streaming", () => {
-    it.effect("SSE streaming endpoint", () =>
+    it.effect("SSE streaming endpoint", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/chat": {
               post: {
@@ -918,8 +888,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result, "chat")
@@ -939,12 +908,11 @@ describe("E2E", () => {
           { delta: "Hello" },
           { delta: " world" }
         ])
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("SSE-only endpoint (no JSON response)", () =>
+    it.effect("SSE-only endpoint (no JSON response)", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/stream-only": {
               post: {
@@ -976,8 +944,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result, "streaming")
@@ -997,14 +964,13 @@ describe("E2E", () => {
           { delta: "chunk1" },
           { delta: "chunk2" }
         ])
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
   })
 
   describe("schema features", () => {
-    it.effect("$ref schema resolution", () =>
+    it.effect("$ref schema resolution", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           specWithComponents(
             {
               "/pets/{petId}": {
@@ -1037,8 +1003,7 @@ describe("E2E", () => {
                 }
               }
             }
-          ),
-          { name: "Client" }
+          )
         )
 
         const mod = evalGenerated(result)
@@ -1049,12 +1014,11 @@ describe("E2E", () => {
         )
         const data = yield* client.getPet("1")
         expect(data).toEqual({ id: "1", name: "Fido" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("branded ID fields", () =>
+    it.effect("branded ID fields", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           baseSpec({
             "/pets": {
               get: {
@@ -1078,19 +1042,17 @@ describe("E2E", () => {
                 }
               }
             }
-          }),
-          { name: "Client" }
+          })
         )
 
         const mod = evalGenerated(result)
         expect(mod.ListPets200Id).toBeDefined()
         expect(typeof mod.ListPets200Id.pipe).toBe("function")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("tuple (prefixItems) - strict tuple, no rest", () =>
+    it.effect("tuple (prefixItems) - strict tuple, no rest", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           ({
             openapi: "3.1.0",
             info: { title: "Test", version: "1.0.0" },
@@ -1121,8 +1083,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }) as any,
-          { name: "Client" }
+          }) as any
         )
 
         const mod = evalGenerated(result)
@@ -1133,12 +1094,11 @@ describe("E2E", () => {
         )
         const data = yield* client.getCoordinates()
         expect(data).toEqual({ point: [1.5, 2.5] })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("tuple with rest schema", () =>
+    it.effect("tuple with rest schema", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           ({
             openapi: "3.1.0",
             info: { title: "Test", version: "1.0.0" },
@@ -1169,8 +1129,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }) as any,
-          { name: "Client" }
+          }) as any
         )
 
         const mod = evalGenerated(result)
@@ -1181,12 +1140,11 @@ describe("E2E", () => {
         )
         const data = yield* client.getData()
         expect(data).toEqual({ values: ["header", 1, 2, 3] })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect("boolean schema items: true produces Schema.Unknown array", () =>
+    it.effect("boolean schema items: true produces Schema.Unknown array", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           ({
             openapi: "3.1.0",
             info: { title: "Test", version: "1.0.0" },
@@ -1213,8 +1171,7 @@ describe("E2E", () => {
                 }
               }
             }
-          }) as any,
-          { name: "Client" }
+          }) as any
         )
 
         const mod = evalGenerated(result)
@@ -1225,14 +1182,13 @@ describe("E2E", () => {
         )
         const data = yield* client.getAnything()
         expect(data).toEqual({ items: [1, "two", true] })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
   })
 
   describe("multi-module", () => {
-    it.effect("common module with shared schemas (success path)", () =>
+    it.effect("common module with shared schemas (success path)", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           specWithComponents(
             {
               "/pets": {
@@ -1279,8 +1235,7 @@ describe("E2E", () => {
                 }
               }
             }
-          ),
-          { name: "Client" }
+          )
         )
 
         expect(result.modules.has("_common")).toBe(true)
@@ -1295,12 +1250,11 @@ describe("E2E", () => {
         )
         const data = yield* client.listPets()
         expect(data).toEqual({ id: "1", name: "Fido" })
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
 
-    it.effect.fails("$ref error schemas use TaggedError directly instead of Body struct (generator bug)", () =>
+    it.effect.fails("$ref error schemas use TaggedError directly instead of Body struct (generator bug)", () => asAny(() =>
       Effect.gen(function*() {
-        const api = yield* OpenApi
-        const result = yield* api.generate(
+        const result = yield* generate(
           specWithComponents(
             {
               "/pets": {
@@ -1361,8 +1315,7 @@ describe("E2E", () => {
                 }
               }
             }
-          ),
-          { name: "Client" }
+          )
         )
 
         const mod = evalGenerated(result, "pets")
@@ -1377,6 +1330,6 @@ describe("E2E", () => {
         const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
         expect(error._tag).toBe("ApiError")
         expect(error.message).toBe("Validation failed")
-      }).pipe(Effect.provide(OpenApi.Live)) as Effect.Effect<void>)
+      })))
   })
 })
