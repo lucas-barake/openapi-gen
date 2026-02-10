@@ -1,5 +1,19 @@
 # @lucas-barake/openapi-gen
 
+## 0.4.0
+
+### Minor Changes
+
+- [#13](https://github.com/lucas-barake/openapi-gen/pull/13) [`9581431`](https://github.com/lucas-barake/openapi-gen/commit/95814311b937626ca1ae328e4666432b67aab34a) Thanks [@lucas-barake](https://github.com/lucas-barake)! - add --url flag for remote OpenAPI specs
+
+### Patch Changes
+
+- [#9](https://github.com/lucas-barake/openapi-gen/pull/9) [`8146362`](https://github.com/lucas-barake/openapi-gen/commit/8146362cdca63053d029db23c2c38adcc084d55c) Thanks [@lucas-barake](https://github.com/lucas-barake)! - Fix error responses without body succeeding instead of failing
+
+- [#12](https://github.com/lucas-barake/openapi-gen/pull/12) [`9d30e26`](https://github.com/lucas-barake/openapi-gen/commit/9d30e2665f7891758413d7893b2aa5b2fc2ee684) Thanks [@lucas-barake](https://github.com/lucas-barake)! - Fix boolean schema crash and add tuple support for OpenAPI 3.1
+
+- [#9](https://github.com/lucas-barake/openapi-gen/pull/9) [`8146362`](https://github.com/lucas-barake/openapi-gen/commit/8146362cdca63053d029db23c2c38adcc084d55c) Thanks [@lucas-barake](https://github.com/lucas-barake)! - Fix TaggedError decoding by generating separate body struct for JSON parsing
+
 ## 0.3.0
 
 ### Minor Changes
