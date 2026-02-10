@@ -39,6 +39,7 @@
     "@changesets/changelog-github": "^0.5.1",
     "@changesets/cli": "^2.29.4",
     "@effect/cli": "^0.73.2",
+    "@effect/experimental": "^0.58.0",
     "@effect/platform": "^0.94.4",
     "@effect/platform-node": "^0.104.1",
     "@effect/vitest": "^0.27.0",
