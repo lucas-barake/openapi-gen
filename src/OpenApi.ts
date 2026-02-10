@@ -253,7 +253,10 @@ export const make = Effect.gen(function*() {
                   )
                 }
                 if (!response.content) {
-                  op.voidSchemas.add(status.toLowerCase())
+                  const statusMajor = Number(status[0])
+                  if (!isNaN(statusMajor) && statusMajor < 4) {
+                    op.voidSchemas.add(status.toLowerCase())
+                  }
                 }
               }
             )

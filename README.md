@@ -117,6 +117,21 @@ paths:
                 properties:
                   message:
                     type: string
+  /pets/{petId}:
+    delete:
+      operationId: deletePet
+      tags: [pets]
+      parameters:
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
 components:
   schemas:
     Pet:
@@ -213,6 +228,21 @@ export const make = (httpClient: HttpClient.HttpClient): PetStoreClient => ({
         orElse: unexpectedStatus
       })),
       Effect.scoped
+    ),
+
+  // 404 has no response body — it falls through to `orElse: unexpectedStatus`
+  // which fails with `HttpClientError.ResponseError`
+  "deletePet": (petId, options) =>
+    httpClient.execute(
+      HttpClientRequest.del(`/pets/${petId}`).pipe(
+        HttpClientRequest.setHeaders(options?.headers ?? {})
+      )
+    ).pipe(
+      Effect.flatMap(HttpClientResponse.matchStatus({
+        "204": () => Effect.void,
+        orElse: unexpectedStatus
+      })),
+      Effect.scoped
     )
 })
 
@@ -231,6 +261,13 @@ export interface PetStoreClient {
   }) => Effect.Effect<
     typeof CreatePet201.Type,
     HttpClientError.HttpClientError | ParseError | CreatePet400
+  >
+
+  readonly "deletePet": (petId: string, options?: {
+    readonly headers?: Headers.Input
+  }) => Effect.Effect<
+    void,
+    HttpClientError.HttpClientError | ParseError
   >
 }
 ```
@@ -273,6 +310,7 @@ The generator maps OpenAPI/JSON Schema types to Effect Schema:
 | Number constraints (`minimum`, `maximum`)                | `.pipe(Schema.greaterThanOrEqualTo(...), ...)`             |
 | Array constraints (`minItems`, `maxItems`)               | `Schema.NonEmptyArray(...)`, `.pipe(Schema.maxItems(...))` |
 | 4xx error responses                                      | `Schema.TaggedError`                                       |
+| 4xx/5xx without response body                            | Falls through to `ResponseError` (fails the Effect)        |
 
 ## Server-Sent Events (SSE)
 
