@@ -143,6 +143,7 @@ describe("CLI integration", () => {
       expect(petsSource).toContain("HttpClientRequest.schemaBodyJson(CreatePetRequest)(options.payload)")
       expect(petsSource).toContain("HttpClientRequest.get(`/pets`)")
       expect(petsSource).toContain("HttpClientRequest.post(`/pets`)")
+      expect(petsSource).toContain("const CreatePet400Body = Schema.Struct(")
       expect(petsSource).toContain("Schema.TaggedError<CreatePet400>")
 
       const usersSource = yield* fs.readFileString(path.join(outDir, "users.ts"))
