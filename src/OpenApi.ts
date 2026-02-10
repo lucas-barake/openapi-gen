@@ -40,7 +40,6 @@ interface ParsedOperation {
   readonly paramsOptional: boolean
   readonly urlParams: ReadonlyArray<string>
   readonly headers: ReadonlyArray<string>
-  readonly cookies: ReadonlyArray<string>
   readonly payload?: string
   readonly payloadFormData: boolean
   readonly pathIds: ReadonlyArray<string>
@@ -133,7 +132,6 @@ export const make = Effect.gen(function*() {
               pathTemplate,
               urlParams: [],
               headers: [],
-              cookies: [],
               payloadFormData: false,
               successSchemas: new Map(),
               errorSchemas: new Map(),
@@ -156,7 +154,7 @@ export const make = Effect.gen(function*() {
                 if ("$ref" in parameter) {
                   parameter = resolveRef(parameter.$ref as string)
                 }
-                if (parameter.in === "path") {
+                if (parameter.in === "path" || parameter.in === "cookie") {
                   return
                 }
                 const paramSchema = parameter.schema
@@ -184,17 +182,17 @@ export const make = Effect.gen(function*() {
                   op.urlParams.push(...added)
                 } else if (parameter.in === "header") {
                   op.headers.push(...added)
-                } else if (parameter.in === "cookie") {
-                  op.cookies.push(...added)
                 }
               })
-              op.params = gen.addSchema(
-                `${schemaId}Params`,
-                schema,
-                context,
-                true
-              )
-              op.paramsOptional = !schema.required || schema.required.length === 0
+              if (Object.keys(schema.properties).length > 0) {
+                op.params = gen.addSchema(
+                  `${schemaId}Params`,
+                  schema,
+                  context,
+                  true
+                )
+                op.paramsOptional = !schema.required || schema.required.length === 0
+              }
             }
             if (operation.requestBody?.content?.["application/json"]?.schema) {
               op.payload = gen.addSchema(
@@ -241,6 +239,16 @@ export const make = Effect.gen(function*() {
                     let errorSchema = response.content["application/json"].schema
                     if ("$ref" in errorSchema) {
                       errorSchema = resolveRef(errorSchema.$ref as string)
+                    }
+                    if ("allOf" in errorSchema && Array.isArray(errorSchema.allOf)) {
+                      const merged: any = { properties: {}, required: [] as Array<string> }
+                      for (const member of errorSchema.allOf) {
+                        const resolved = "$ref" in member ? resolveRef(member.$ref as string) : member
+                        Object.assign(merged, resolved)
+                        Object.assign(merged.properties, resolved.properties ?? {})
+                        merged.required = merged.required.concat(resolved.required ?? [])
+                      }
+                      errorSchema = merged
                     }
                     if ("properties" in errorSchema) {
                       op.objectErrorSchemas.add(schemaName)

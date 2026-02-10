@@ -986,6 +986,162 @@ describe("OpenApi", () => {
 
         expect(output).toContain("\"filter[status]\"")
       }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("HEAD method generates HttpClientRequest.head", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/health": {
+                head: {
+                  operationId: "healthHead",
+                  responses: {
+                    "200": { description: "OK" }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain("HttpClientRequest.head(`/health`)")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("OPTIONS method generates HttpClientRequest.options", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/cors": {
+                options: {
+                  operationId: "corsCheck",
+                  responses: {
+                    "200": { description: "OK" }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain("HttpClientRequest.options(`/cors`)")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("TRACE method generates HttpClientRequest.make(\"TRACE\")", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/debug": {
+                trace: {
+                  operationId: "traceRequest",
+                  responses: {
+                    "200": { description: "OK" }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain(`HttpClientRequest.make("TRACE")`)
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("oneOf error schema does not generate Body struct", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            baseSpec({
+              "/users/{userId}": {
+                get: {
+                  operationId: "getUser",
+                  parameters: [
+                    { name: "userId", in: "path", required: true, schema: { type: "string" } }
+                  ],
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { id: { type: "string" } } }
+                        }
+                      }
+                    },
+                    "400": {
+                      description: "Bad request",
+                      content: {
+                        "application/json": {
+                          schema: {
+                            oneOf: [
+                              { type: "object", properties: { code: { type: "string" } } },
+                              { type: "object", properties: { error: { type: "string" } } }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain("GetUser400")
+        expect(output).not.toContain("GetUser400Body")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("cookie parameters defined via $ref are filtered out", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            specWithComponents(
+              {
+                "/data": {
+                  get: {
+                    operationId: "getData",
+                    parameters: [
+                      { $ref: "#/components/parameters/SessionCookie" }
+                    ],
+                    responses: {
+                      "200": {
+                        description: "OK",
+                        content: {
+                          "application/json": {
+                            schema: { type: "object", properties: { data: { type: "string" } } }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                parameters: {
+                  SessionCookie: {
+                    name: "session",
+                    in: "cookie",
+                    required: true,
+                    schema: { type: "string" }
+                  }
+                }
+              }
+            ),
+            { name: "Client" }
+          )
+        )
+
+        expect(output).not.toContain("GetDataParams")
+      }).pipe(Effect.provide(OpenApi.Live)))
   })
 
   describe("Per-tag generation", () => {
@@ -1194,6 +1350,128 @@ describe("OpenApi", () => {
         expect(petsModule.source).toContain("export const make")
         expect(petsModule.source).toContain("export interface Client")
       }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("operation with multiple tags goes into first tag only", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const result = yield* api.generate(
+          baseSpec({
+            "/admin/pets": {
+              get: {
+                operationId: "adminListPets",
+                tags: ["pets", "admin"],
+                responses: {
+                  "200": {
+                    description: "OK",
+                    content: {
+                      "application/json": {
+                        schema: { type: "array", items: { type: "string" } }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "/admin/settings": {
+              get: {
+                operationId: "getSettings",
+                tags: ["admin"],
+                responses: {
+                  "200": {
+                    description: "OK",
+                    content: {
+                      "application/json": {
+                        schema: { type: "object", properties: { debug: { type: "boolean" } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }),
+          { name: "Client" }
+        )
+
+        const petsModule = result.modules.get("pets")!
+        expect(petsModule.source).toContain("adminListPets")
+
+        const adminModule = result.modules.get("admin")!
+        expect(adminModule.source).not.toContain("adminListPets")
+        expect(adminModule.source).toContain("getSettings")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("shared error Body schema is re-exported in tag modules", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const result = yield* api.generate(
+          specWithComponents(
+            {
+              "/pets": {
+                get: {
+                  operationId: "listPets",
+                  tags: ["pets"],
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "array", items: { type: "string" } }
+                        }
+                      }
+                    },
+                    "400": {
+                      description: "Bad request",
+                      content: {
+                        "application/json": {
+                          schema: { $ref: "#/components/schemas/ApiError" }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "/users": {
+                get: {
+                  operationId: "listUsers",
+                  tags: ["users"],
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "array", items: { type: "string" } }
+                        }
+                      }
+                    },
+                    "400": {
+                      description: "Bad request",
+                      content: {
+                        "application/json": {
+                          schema: { $ref: "#/components/schemas/ApiError" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              schemas: {
+                ApiError: {
+                  type: "object",
+                  required: ["message"],
+                  properties: { message: { type: "string" } }
+                }
+              }
+            }
+          ),
+          { name: "Client" }
+        )
+
+        const petsModule = result.modules.get("pets")!
+        expect(petsModule.source).toContain("ApiErrorBody")
+        expect(petsModule.source).toMatch(/export \{[^}]*ApiErrorBody[^}]*\} from ".\/_common\.js"/)
+      }).pipe(Effect.provide(OpenApi.Live)))
   })
 
   describe("SSE streaming", () => {
@@ -1363,6 +1641,59 @@ describe("OpenApi", () => {
         const eventsModule = result.modules.get("events")!
         expect(eventsModule.source).toContain("\"streamEventsStream\":")
         expect(eventsModule.source).toContain("Stream.Stream<typeof StreamEventsStreamEvent.Type")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("SSE stream method interface includes error types", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const result = yield* api.generate(
+          baseSpec({
+            "/chat": {
+              post: {
+                operationId: "chat",
+                tags: ["chat"],
+                requestBody: {
+                  content: {
+                    "application/json": {
+                      schema: { type: "object", properties: { msg: { type: "string" } } }
+                    }
+                  }
+                },
+                responses: {
+                  "200": {
+                    description: "OK",
+                    content: {
+                      "application/json": {
+                        schema: { type: "object", properties: { result: { type: "string" } } }
+                      },
+                      "text/event-stream": {
+                        schema: { type: "object", properties: { delta: { type: "string" } } }
+                      }
+                    }
+                  },
+                  "400": {
+                    description: "Bad request",
+                    content: {
+                      "application/json": {
+                        schema: {
+                          type: "object",
+                          properties: { message: { type: "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }),
+          { name: "Client" }
+        )
+
+        const chatModule = result.modules.get("chat")!
+        expect(chatModule.source).toContain("Chat400")
+        expect(chatModule.source).toContain(
+          "Stream.Stream<typeof ChatStreamEvent.Type, HttpClientError.HttpClientError | ParseError | Chat400>"
+        )
       }).pipe(Effect.provide(OpenApi.Live)))
   })
 })
