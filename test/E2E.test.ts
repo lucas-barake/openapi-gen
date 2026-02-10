@@ -490,7 +490,7 @@ describe("E2E", () => {
         expect(requests[0].url.searchParams.get("filter[type]")).toBe("dog")
       })))
 
-    it.effect.fails("multipart form data — bodyFormDataRecord returns HttpClientRequest not Effect (generator bug)", () => asAny(() =>
+    it.effect("multipart form data", () => asAny(() =>
       Effect.gen(function*() {
         const result = yield* generate(
           baseSpec({
@@ -1252,7 +1252,7 @@ describe("E2E", () => {
         expect(data).toEqual({ id: "1", name: "Fido" })
       })))
 
-    it.effect.fails("$ref error schemas use TaggedError directly instead of Body struct (generator bug)", () => asAny(() =>
+    it.effect("$ref error schemas produce TaggedError via Body struct", () => asAny(() =>
       Effect.gen(function*() {
         const result = yield* generate(
           specWithComponents(

@@ -238,7 +238,11 @@ export const make = Effect.gen(function*() {
                   } else {
                     gen.markAsError(schemaName)
                     op.errorSchemas.set(statusLower, schemaName)
-                    if ("properties" in response.content["application/json"].schema) {
+                    let errorSchema = response.content["application/json"].schema
+                    if ("$ref" in errorSchema) {
+                      errorSchema = resolveRef(errorSchema.$ref as string)
+                    }
+                    if ("properties" in errorSchema) {
                       op.objectErrorSchemas.add(schemaName)
                     }
                   }
@@ -339,8 +343,17 @@ export const make = Effect.gen(function*() {
         const commonReexports = commonSchemaNames.size > 0
           ? [...schemas].filter((n) => commonSchemaNames.has(n))
           : []
-        const commonReexportLine = commonReexports.length > 0
-          ? `export { ${commonReexports.join(", ")} } from "./_common${options.ext ?? ".js"}"`
+        const errorBodyNames: Array<string> = []
+        for (const op of ops) {
+          for (const name of op.objectErrorSchemas) {
+            if (commonSchemaNames.has(name) && !errorBodyNames.includes(`${name}Body`)) {
+              errorBodyNames.push(`${name}Body`)
+            }
+          }
+        }
+        const allReexports = [...commonReexports, ...errorBodyNames]
+        const commonReexportLine = allReexports.length > 0
+          ? `export { ${allReexports.join(", ")} } from "./_common${options.ext ?? ".js"}"`
           : ""
 
         const hasStreaming = ops.some((op) => !!op.streamSchema)
@@ -527,15 +540,15 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
         requestPipeline.push(`HttpClientRequest.bodyFormDataRecord(options.payload as any)`)
       } else {
         requestPipeline.push(`HttpClientRequest.schemaBodyJson(${operation.payload})(options.payload)`)
+        return (
+          `"${operation.id}": (${args.join(", ")}) =>\n    ` +
+          `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate}).pipe(\n      ` +
+          `${requestPipeline.join(",\n      ")},\n      ` +
+          `Effect.flatMap((request) => httpClient.execute(request)),\n      ` +
+          `Effect.flatMap(${matchStatus}),\n      ` +
+          `Effect.scoped,\n    )`
+        )
       }
-      return (
-        `"${operation.id}": (${args.join(", ")}) =>\n    ` +
-        `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate}).pipe(\n      ` +
-        `${requestPipeline.join(",\n      ")},\n      ` +
-        `Effect.flatMap((request) => httpClient.execute(request)),\n      ` +
-        `Effect.flatMap(${matchStatus}),\n      ` +
-        `Effect.scoped,\n    )`
-      )
     }
     return (
       `"${operation.id}": (${args.join(", ")}) =>\n    ` +

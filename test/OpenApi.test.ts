@@ -315,7 +315,7 @@ describe("OpenApi", () => {
         expect(output).toContain("new GetUser404(body)")
       }).pipe(Effect.provide(OpenApi.Live)))
 
-    it.effect("error schema body struct is NOT exported", () =>
+    it.effect("error schema body struct is exported", () =>
       Effect.gen(function*() {
         const api = yield* OpenApi
         const output = allSources(
@@ -355,8 +355,7 @@ describe("OpenApi", () => {
           )
         )
 
-        expect(output).toContain("const GetUser404Body")
-        expect(output).not.toContain("export const GetUser404Body")
+        expect(output).toContain("export const GetUser404Body")
       }).pipe(Effect.provide(OpenApi.Live)))
 
     it.effect("non-object error schemas still work", () =>
