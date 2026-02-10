@@ -1,5 +1,11 @@
 # @lucas-barake/openapi-gen
 
+## 0.4.2
+
+### Patch Changes
+
+- [#16](https://github.com/lucas-barake/openapi-gen/pull/16) [`85e7afe`](https://github.com/lucas-barake/openapi-gen/commit/85e7afe6172323bf845921831787361ea422b732) Thanks [@lucas-barake](https://github.com/lucas-barake)! - fix allOf error schema self-reference and cookie $ref parameter leak
+
 ## 0.4.1
 
 ### Patch Changes
