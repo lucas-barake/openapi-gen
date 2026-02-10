@@ -511,6 +511,142 @@ describe("JsonSchemaGen — Schema mode", () => {
   )
 })
 
+describe("JsonSchemaGen — boolean schemas (OpenAPI 3.1)", () => {
+  it.effect(
+    "strict tuple (items: false) generates Schema.Tuple",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "Coords",
+          {
+            type: "object",
+            required: ["coords"],
+            properties: {
+              coords: {
+                type: "array",
+                prefixItems: [{ type: "number" }, { type: "number" }],
+                items: false
+              }
+            }
+          } as any,
+          { asStruct: true }
+        )
+        expect(output).toContain("Schema.Tuple(Schema.Number, Schema.Number)")
+      })
+  )
+
+  it.effect(
+    "items: true generates Schema.Array(Schema.Unknown)",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "AnyList",
+          {
+            type: "object",
+            required: ["items"],
+            properties: {
+              items: { type: "array", items: true }
+            }
+          } as any,
+          { asStruct: true }
+        )
+        expect(output).toContain("Schema.Array(Schema.Unknown)")
+      })
+  )
+
+  it.effect(
+    "tuple with rest schema generates Schema.Tuple([...], rest)",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "HeadAndTail",
+          {
+            type: "object",
+            required: ["data"],
+            properties: {
+              data: {
+                type: "array",
+                prefixItems: [{ type: "string" }],
+                items: { type: "number" }
+              }
+            }
+          } as any,
+          { asStruct: true }
+        )
+        expect(output).toContain("Schema.Tuple([Schema.String], Schema.Number)")
+      })
+  )
+
+  it.effect(
+    "prefixItems with $ref elements resolves refs in tuple",
+    () =>
+      Effect.gen(function*() {
+        const gen = yield* JsonSchemaGen.JsonSchemaGen
+        const context = {
+          components: {
+            schemas: {
+              Point: {
+                type: "object",
+                required: ["x", "y"],
+                properties: {
+                  x: { type: "number" },
+                  y: { type: "number" }
+                }
+              }
+            }
+          }
+        }
+        gen.addSchema(
+          "Line",
+          {
+            type: "object",
+            required: ["endpoints"],
+            properties: {
+              endpoints: {
+                type: "array",
+                prefixItems: [
+                  { $ref: "#/components/schemas/Point" },
+                  { $ref: "#/components/schemas/Point" }
+                ],
+                items: false
+              }
+            }
+          } as any,
+          context
+        )
+        const output = yield* gen.generate("Schema")
+        expect(output).toContain("Schema.Tuple(Point, Point)")
+        expect(output).toContain("Schema.Class<Point>(\"Point\")")
+      }).pipe(
+        JsonSchemaGen.with,
+        Effect.provide(JsonSchemaGen.layerTransformerSchema)
+      )
+  )
+
+  it.effect(
+    "nested tuple in object property",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "GeoData",
+          {
+            type: "object",
+            required: ["position"],
+            properties: {
+              position: {
+                type: "array",
+                prefixItems: [{ type: "number" }, { type: "number" }, { type: "number" }],
+                items: false
+              }
+            }
+          } as any,
+          { asStruct: true }
+        )
+        expect(output).toContain("Schema.Tuple(Schema.Number, Schema.Number, Schema.Number)")
+      })
+  )
+})
+
 describe("JsonSchemaGen — branded IDs", () => {
   it.effect(
     "brands 'id' field using parent schema name",

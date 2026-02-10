@@ -309,6 +309,7 @@ The generator maps OpenAPI/JSON Schema types to Effect Schema:
 | String constraints (`minLength`, `maxLength`, `pattern`) | `.pipe(Schema.minLength(...), ...)`                        |
 | Number constraints (`minimum`, `maximum`)                | `.pipe(Schema.greaterThanOrEqualTo(...), ...)`             |
 | Array constraints (`minItems`, `maxItems`)               | `Schema.NonEmptyArray(...)`, `.pipe(Schema.maxItems(...))` |
+| `prefixItems` + `items: false` (OpenAPI 3.1 tuples)      | `Schema.Tuple(...)`                                        |
 | 4xx error responses                                      | `Schema.TaggedError`                                       |
 | 4xx/5xx without response body                            | Falls through to `ResponseError` (fails the Effect)        |
 
