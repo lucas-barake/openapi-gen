@@ -6,13 +6,14 @@ import { pipe } from "effect/Function"
 import * as Layer from "effect/Layer"
 import * as Option from "effect/Option"
 import * as Struct from "effect/Struct"
-import { identifier, nonEmptyString, toComment } from "./Utils.js"
+import { brandNameForId, identifier, isIdField, nonEmptyString, toComment } from "./Utils.js"
 
 const make = Effect.gen(function*() {
   const store = new Map<string, JsonSchema.JsonSchema>()
   const classes = new Set<string>()
   const enums = new Set<string>()
   const errors = new Set<string>()
+  const brands = new Map<string, string>()
   const refStore = new Map<string, JsonSchema.JsonSchema>()
 
   function cleanupSchema(schema: JsonSchema.JsonSchema) {
@@ -229,19 +230,35 @@ const make = Effect.gen(function*() {
             enumNullable ? filteredSchema : schema,
             currentIdentifier + identifier(key)
           ).pipe(
-            Option.map((source) =>
-              transformer.onProperty({
+            Option.map((source) => {
+              let finalSource = source
+              if (isIdField(key) && !isOptional) {
+                const brandName = brandNameForId(key, currentIdentifier)
+                if (!brands.has(brandName)) {
+                  const baseType = "format" in fullSchema && fullSchema.format === "uuid"
+                    ? `${importName}.UUID`
+                    : source
+                  brands.set(
+                    brandName,
+                    `export const ${brandName} = ${baseType}.pipe(${importName}.brand("${brandName}"))\nexport type ${brandName} = typeof ${brandName}.Type`
+                  )
+                }
+                finalSource = brandName
+              }
+              return transformer.onProperty({
                 importName,
                 description: nonEmptyString(schema.description),
                 key,
-                source,
+                source: finalSource,
                 isOptional,
                 isNullable: enumNullable ||
                   ("nullable" in fullSchema && fullSchema.nullable === true) ||
                   ("default" in fullSchema && fullSchema.default === null),
-                default: fullSchema.default
+                default: fullSchema.default,
+                parentName: currentIdentifier,
+                schema: fullSchema
               })
-            )
+            })
           )
         }),
         Arr.join(transformer.propertySeparator)
@@ -408,14 +425,16 @@ const make = Effect.gen(function*() {
   }
 
   const generate = (importName: string, filter?: ReadonlySet<string>) =>
-    Effect.sync(() =>
-      pipe(
+    Effect.sync(() => {
+      const schemas = pipe(
         store.entries(),
         Arr.filter(([name]) => filter === undefined || filter.has(name)),
         Arr.filterMap(([name, schema]) => topLevelSource(importName, name, schema)),
         Arr.join("\n\n")
       )
-    )
+      const brandDecls = [...brands.values()].join("\n\n")
+      return brandDecls ? `${brandDecls}\n\n${schemas}` : schemas
+    })
 
   const getSchemaNames = (): ReadonlySet<string> => new Set(store.keys())
 
@@ -465,6 +484,8 @@ export class JsonSchemaTransformer extends Context.Tag("JsonSchemaTransformer")<
       readonly isOptional: boolean
       readonly isNullable: boolean
       readonly default?: unknown
+      readonly parentName: string
+      readonly schema: JsonSchema.JsonSchema
     }): string
 
     readonly propertySeparator: string

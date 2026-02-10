@@ -39,6 +39,15 @@ export const toKebabCase = (self: string): string => {
   return result
 }
 
+const ID_PATTERN = /^id$|Id$|_id$|ID$|^uuid$|Uuid$|_uuid$/
+
+export const isIdField = (key: string): boolean => ID_PATTERN.test(key)
+
+export const brandNameForId = (key: string, parentName: string): string => {
+  if (key === "id" || key === "uuid") return `${parentName}${String.capitalize(key)}`
+  return identifier(key)
+}
+
 export const nonEmptyString = flow(
   Option.fromNullable<unknown>,
   Option.filter(String.isString),

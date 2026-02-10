@@ -510,3 +510,127 @@ describe("JsonSchemaGen — Schema mode", () => {
       })
   )
 })
+
+describe("JsonSchemaGen — branded IDs", () => {
+  it.effect(
+    "brands 'id' field using parent schema name",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "Pet",
+          {
+            type: "object",
+            required: ["id", "name"],
+            properties: {
+              id: { type: "string" },
+              name: { type: "string" }
+            }
+          } as JsonSchema.JsonSchema
+        )
+        expect(output).toContain("Schema.String.pipe(Schema.brand(\"PetId\"))")
+        expect(output).toContain("\"id\": PetId")
+      })
+  )
+
+  it.effect(
+    "brands camelCase *Id fields",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "Order",
+          {
+            type: "object",
+            required: ["userId", "productId"],
+            properties: {
+              userId: { type: "string" },
+              productId: { type: "integer" }
+            }
+          } as unknown as JsonSchema.JsonSchema
+        )
+        expect(output).toContain("Schema.String.pipe(Schema.brand(\"UserId\"))")
+        expect(output).toContain("Schema.Int.pipe(Schema.brand(\"ProductId\"))")
+        expect(output).toContain("\"userId\": UserId")
+        expect(output).toContain("\"productId\": ProductId")
+      })
+  )
+
+  it.effect(
+    "brands snake_case *_id fields",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "Comment",
+          {
+            type: "object",
+            required: ["user_id"],
+            properties: {
+              user_id: { type: "string" }
+            }
+          } as JsonSchema.JsonSchema
+        )
+        expect(output).toContain("Schema.String.pipe(Schema.brand(\"UserId\"))")
+        expect(output).toContain("\"user_id\": UserId")
+      })
+  )
+
+  it.effect(
+    "brands uuid format fields with Schema.UUID",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "Entity",
+          {
+            type: "object",
+            required: ["id"],
+            properties: {
+              id: { type: "string", format: "uuid" }
+            }
+          } as JsonSchema.JsonSchema
+        )
+        expect(output).toContain("Schema.UUID.pipe(Schema.brand(\"EntityId\"))")
+      })
+  )
+
+  it.effect(
+    "deduplicates brands across properties",
+    () =>
+      Effect.gen(function*() {
+        const gen = yield* JsonSchemaGen.JsonSchemaGen
+        gen.addSchema("Order", {
+          type: "object",
+          required: ["userId"],
+          properties: { userId: { type: "string" } }
+        } as JsonSchema.JsonSchema)
+        gen.addSchema("Comment", {
+          type: "object",
+          required: ["userId"],
+          properties: { userId: { type: "string" } }
+        } as JsonSchema.JsonSchema)
+        const output = yield* gen.generate("Schema")
+        const matches = output.match(/Schema\.brand\("UserId"\)/g)
+        expect(matches).toHaveLength(1)
+      }).pipe(
+        JsonSchemaGen.with,
+        Effect.provide(JsonSchemaGen.layerTransformerSchema)
+      )
+  )
+
+  it.effect(
+    "does not brand non-id string fields",
+    () =>
+      Effect.gen(function*() {
+        const output = yield* runSchema(
+          "User",
+          {
+            type: "object",
+            required: ["name", "email"],
+            properties: {
+              name: { type: "string" },
+              email: { type: "string" }
+            }
+          } as JsonSchema.JsonSchema
+        )
+        expect(output).not.toContain("Schema.brand")
+      })
+  )
+})
