@@ -17,6 +17,7 @@ const make = Effect.gen(function*() {
   const refStore = new Map<string, JsonSchema.JsonSchema>()
 
   function cleanupSchema(schema: JsonSchema.JsonSchema) {
+    if (typeof schema !== "object" || schema === null) return schema as any
     if (
       "type" in schema &&
       Array.isArray(schema.type) &&
@@ -76,6 +77,7 @@ const make = Effect.gen(function*() {
       childName: string | undefined
     ) {
       schema = cleanupSchema(schema)
+      if (typeof schema !== "object" || schema === null) return
       const enumSuffix = childName?.endsWith("Enum") ? "" : "Enum"
       if ("$ref" in schema) {
         if (seenRefs.has(schema.$ref)) {
@@ -104,8 +106,11 @@ const make = Effect.gen(function*() {
       } else if ("type" in schema && schema.type === "array") {
         if (Array.isArray(schema.items)) {
           schema.items.forEach((s) => addRefs(s, undefined))
-        } else if (schema.items) {
+        } else if (schema.items && typeof schema.items === "object") {
           addRefs(schema.items, undefined)
+        }
+        if ("prefixItems" in schema && Array.isArray((schema as any).prefixItems)) {
+          ;(schema as any).prefixItems.forEach((s: any) => addRefs(s, undefined))
         }
       } else if ("allOf" in schema) {
         const resolved = resolveAllOf(schema, {
@@ -183,6 +188,7 @@ const make = Effect.gen(function*() {
   }
 
   const getSchema = (raw: JsonSchema.JsonSchema): JsonSchema.JsonSchema => {
+    if (typeof raw !== "object" || raw === null) return raw as any
     if ("$ref" in raw) {
       return refStore.get(raw.$ref) ?? raw
     }
@@ -192,6 +198,7 @@ const make = Effect.gen(function*() {
   const flattenAllOf = (
     schema: JsonSchema.JsonSchema
   ): JsonSchema.JsonSchema => {
+    if (typeof schema !== "object" || schema === null) return schema as any
     if ("allOf" in schema) {
       let out = {} as JsonSchema.JsonSchema
       for (const member of schema.allOf) {
@@ -215,6 +222,10 @@ const make = Effect.gen(function*() {
     topLevel = false
   ): Option.Option<string> => {
     schema = cleanupSchema(schema)
+    if (typeof schema !== "object" || schema === null) return Option.none()
+    if ("$id" in schema && schema.$id === "/schemas/any") {
+      return Option.some(`${importName}.Unknown`)
+    }
     if ("properties" in schema) {
       const obj = schema as JsonSchema.Object
       const required = obj.required ?? []
@@ -392,6 +403,17 @@ const make = Effect.gen(function*() {
           return Option.some(transformer.onBoolean({ importName }))
         }
         case "array": {
+          if ("prefixItems" in schema && Array.isArray((schema as any).prefixItems)) {
+            const prefixItems = (schema as any).prefixItems as Array<JsonSchema.JsonSchema>
+            const elements = pipe(
+              prefixItems,
+              Arr.filterMap((item) => toSource(importName, item, currentIdentifier))
+            )
+            const rest = schema.items && typeof schema.items === "object" && !Array.isArray(schema.items)
+              ? Option.getOrUndefined(toSource(importName, schema.items, currentIdentifier))
+              : undefined
+            return Option.some(transformer.onTuple({ importName, elements, rest }))
+          }
           const nonEmpty = typeof schema.minItems === "number" && schema.minItems > 0
           return toSource(
             importName,
@@ -418,6 +440,8 @@ const make = Effect.gen(function*() {
   ): JsonSchema.JsonSchema => {
     if (schema === undefined) {
       return { $id: "/schemas/any" }
+    } else if (typeof schema === "boolean") {
+      return schema ? { $id: "/schemas/any" } : { not: {} } as any
     } else if (Array.isArray(schema)) {
       return { anyOf: schema }
     }
@@ -531,6 +555,12 @@ export class JsonSchemaTransformer extends Context.Tag("JsonSchemaTransformer")<
       readonly schema: JsonSchema.Array
       readonly item: string
       readonly nonEmpty: boolean
+    }): string
+
+    onTuple(options: {
+      readonly importName: string
+      readonly elements: ReadonlyArray<string>
+      readonly rest: string | undefined
     }): string
 
     onUnion(options: {
@@ -674,6 +704,12 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
 
       return `${importName}.${nonEmpty ? "NonEmpty" : ""}Array(${item})${pipeSource(modifiers)}`
     },
+    onTuple({ importName, elements, rest }) {
+      if (rest !== undefined) {
+        return `${importName}.Tuple([${elements.join(", ")}], ${rest})`
+      }
+      return `${importName}.Tuple(${elements.join(", ")})`
+    },
     onUnion({ importName, items }) {
       return `${importName}.Union(${items.map((_) => `${toComment(_.description)}${_.source}`).join(",\n")})`
     }
@@ -684,6 +720,8 @@ function mergeSchemas(
   self: JsonSchema.JsonSchema,
   other: JsonSchema.JsonSchema
 ): JsonSchema.JsonSchema {
+  if (typeof self !== "object" || self === null) return other
+  if (typeof other !== "object" || other === null) return self
   if ("properties" in self && "properties" in other) {
     return {
       ...other,
@@ -712,6 +750,7 @@ function resolveAllOf(
   context: JsonSchema.JsonSchema,
   resolveRefs = true
 ): JsonSchema.JsonSchema {
+  if (typeof schema !== "object" || schema === null) return schema as any
   if ("$ref" in schema) {
     const resolved = resolveRef(schema, context, resolveRefs)
     if (!resolved) {
@@ -764,6 +803,7 @@ function resolveRef(
 }
 
 function filterNullable(schema: JsonSchema.JsonSchema) {
+  if (typeof schema !== "object" || schema === null) return [false, schema] as const
   if ("oneOf" in schema || "anyOf" in schema) {
     const items: Array<JsonSchema.JsonSchema> = (schema as any).oneOf ?? (schema as any).anyOf
     const prop = "oneOf" in schema ? "oneOf" : "anyOf"

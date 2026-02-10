@@ -903,6 +903,50 @@ describe("OpenApi", () => {
         expect(output).toContain("/**\n* Ping the server\n*/")
       }).pipe(Effect.provide(OpenApi.Live)))
 
+    it.effect("endpoint returning tuple field does not crash and generates Schema.Tuple", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const output = allSources(
+          yield* api.generate(
+            ({
+              openapi: "3.1.0",
+              info: { title: "Test", version: "1.0.0" },
+              paths: {
+                "/coordinates": {
+                  get: {
+                    operationId: "getCoordinates",
+                    responses: {
+                      "200": {
+                        description: "OK",
+                        content: {
+                          "application/json": {
+                            schema: {
+                              type: "object",
+                              required: ["point"],
+                              properties: {
+                                point: {
+                                  type: "array",
+                                  prefixItems: [{ type: "number" }, { type: "number" }],
+                                  items: false
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }) as any,
+            { name: "Client" }
+          )
+        )
+
+        expect(output).toContain("Schema.Tuple(Schema.Number, Schema.Number)")
+        expect(output).not.toContain("Schema.Array")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
     it.effect("parameter with nested object properties expands to bracket notation", () =>
       Effect.gen(function*() {
         const api = yield* OpenApi
