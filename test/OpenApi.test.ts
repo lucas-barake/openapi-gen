@@ -890,4 +890,174 @@ describe("OpenApi", () => {
         expect(petsModule.source).toContain("export interface Client")
       }).pipe(Effect.provide(OpenApi.Live)))
   })
+
+  describe("SSE streaming", () => {
+    const sseSpec = baseSpec({
+      "/chat/completions": {
+        post: {
+          operationId: "createChatCompletion",
+          tags: ["chat"],
+          requestBody: {
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["messages"],
+                  properties: {
+                    messages: { type: "array", items: { type: "string" } }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            "200": {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: { result: { type: "string" } }
+                  }
+                },
+                "text/event-stream": {
+                  schema: {
+                    type: "object",
+                    required: ["delta"],
+                    properties: { delta: { type: "string" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    })
+
+    it.effect("generates both regular and stream methods for SSE endpoints", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const result = yield* api.generate(sseSpec, { name: "Client" })
+        const chatModule = result.modules.get("chat")!
+
+        expect(chatModule.source).toContain("\"createChatCompletion\":")
+        expect(chatModule.source).toContain("\"createChatCompletionStream\":")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("stream method returns Stream.Stream in interface", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const result = yield* api.generate(sseSpec, { name: "Client" })
+        const chatModule = result.modules.get("chat")!
+
+        expect(chatModule.source).toContain("Stream.Stream<typeof CreateChatCompletionStreamEvent.Type")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("stream method uses Sse.makeChannel pipeline", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const result = yield* api.generate(sseSpec, { name: "Client" })
+        const chatModule = result.modules.get("chat")!
+
+        expect(chatModule.source).toContain("Sse.makeChannel()")
+        expect(chatModule.source).toContain("Stream.decodeText()")
+        expect(chatModule.source).toContain("Stream.unwrapScoped")
+        expect(chatModule.source).toContain("Schema.parseJson(CreateChatCompletionStreamEvent)")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("adds Stream and Sse imports only for modules with SSE", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const result = yield* api.generate(
+          ({
+            openapi: "3.0.0",
+            info: { title: "Test", version: "1.0.0" },
+            paths: {
+              "/chat": {
+                post: {
+                  operationId: "chat",
+                  tags: ["streaming"],
+                  requestBody: {
+                    content: {
+                      "application/json": {
+                        schema: { type: "object", properties: { msg: { type: "string" } } }
+                      }
+                    }
+                  },
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "text/event-stream": {
+                          schema: { type: "object", properties: { chunk: { type: "string" } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "/health": {
+                get: {
+                  operationId: "health",
+                  tags: ["other"],
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { ok: { type: "boolean" } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }) as any,
+          { name: "Client" }
+        )
+
+        const streamingModule = result.modules.get("streaming")!
+        expect(streamingModule.source).toContain("import * as Sse from \"@effect/experimental/Sse\"")
+        expect(streamingModule.source).toContain("import * as Stream from \"effect/Stream\"")
+
+        const otherModule = result.modules.get("other")!
+        expect(otherModule.source).not.toContain("Sse")
+        expect(otherModule.source).not.toContain("Stream")
+      }).pipe(Effect.provide(OpenApi.Live)))
+
+    it.effect("SSE-only endpoint (no application/json) generates only stream method", () =>
+      Effect.gen(function*() {
+        const api = yield* OpenApi
+        const result = yield* api.generate(
+          baseSpec({
+            "/events": {
+              get: {
+                operationId: "streamEvents",
+                tags: ["events"],
+                responses: {
+                  "200": {
+                    description: "OK",
+                    content: {
+                      "text/event-stream": {
+                        schema: {
+                          type: "object",
+                          required: ["type"],
+                          properties: { type: { type: "string" }, data: { type: "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }),
+          { name: "Client" }
+        )
+
+        const eventsModule = result.modules.get("events")!
+        expect(eventsModule.source).toContain("\"streamEventsStream\":")
+        expect(eventsModule.source).toContain("Stream.Stream<typeof StreamEventsStreamEvent.Type")
+      }).pipe(Effect.provide(OpenApi.Live)))
+  })
 })

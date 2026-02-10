@@ -49,6 +49,7 @@ interface ParsedOperation {
   readonly errorSchemas: ReadonlyMap<string, string>
   readonly voidSchemas: ReadonlySet<string>
   readonly schemaNames: ReadonlySet<string>
+  readonly streamSchema?: string
 }
 
 export interface GenerateResult {
@@ -236,6 +237,15 @@ export const make = Effect.gen(function*() {
                     op.errorSchemas.set(statusLower, schemaName)
                   }
                 }
+                const eventStreamContent = (response.content as any)?.["text/event-stream"]
+                if (!op.streamSchema && eventStreamContent?.schema) {
+                  op.streamSchema = gen.addSchema(
+                    `${schemaId}StreamEvent`,
+                    eventStreamContent.schema,
+                    context,
+                    true
+                  )
+                }
                 if (!response.content) {
                   op.voidSchemas.add(status.toLowerCase())
                 }
@@ -249,6 +259,7 @@ export const make = Effect.gen(function*() {
             for (const name of op.successSchemas.values()) op.schemaNames.add(name)
             for (const name of op.errorSchemas.values()) op.schemaNames.add(name)
             if (defaultSchema) op.schemaNames.add(defaultSchema)
+            if (op.streamSchema) op.schemaNames.add(op.streamSchema)
             operations.push(op)
           })
 
@@ -323,7 +334,13 @@ export const make = Effect.gen(function*() {
           ? `export { ${commonReexports.join(", ")} } from "./_common.js"`
           : ""
 
+        const hasStreaming = ops.some((op) => !!op.streamSchema)
+        const streamingImports = hasStreaming
+          ? `import * as Sse from "@effect/experimental/Sse"\nimport * as Stream from "effect/Stream"`
+          : ""
+
         const parts = [transformer.imports]
+        if (streamingImports) parts.push(streamingImports)
         if (commonReexportLine) parts.push(commonReexportLine)
         if (tagSchemas) parts.push(tagSchemas)
         parts.push(transformer.toImplementation(options.name, ops))
@@ -371,12 +388,18 @@ export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
   const operationsToInterface = (
     name: string,
     operations: ReadonlyArray<ParsedOperation>
-  ) =>
-    `export interface ${name} {
-  ${operations.map((op) => operationToMethod(op)).join("\n  ")}
-}`
+  ) => {
+    const methods: Array<string> = []
+    for (const op of operations) {
+      methods.push(operationToMethod(op))
+      if (op.streamSchema) {
+        methods.push(operationToStreamMethod(op))
+      }
+    }
+    return `export interface ${name} {\n  ${methods.join("\n  ")}\n}`
+  }
 
-  const operationToMethod = (operation: ParsedOperation) => {
+  const buildOptionsArgs = (operation: ParsedOperation) => {
     const args: Array<string> = []
     if (operation.pathIds.length > 0) {
       args.push(...operation.pathIds.map((id) => `${id}: string`))
@@ -393,6 +416,11 @@ export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
     optionFields.push(`readonly headers?: Headers.Input`)
     const hasRequired = !!operation.payload || (!!operation.params && !operation.paramsOptional)
     args.push(`options${hasRequired ? "" : "?"}: { ${optionFields.join("; ")} }`)
+    return args
+  }
+
+  const operationToMethod = (operation: ParsedOperation) => {
+    const args = buildOptionsArgs(operation)
     let success = "void"
     if (operation.successSchemas.size > 0) {
       success = Array.from(operation.successSchemas.values())
@@ -410,15 +438,34 @@ export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
     }) => Effect.Effect<${success}, ${errors.join(" | ")}>`
   }
 
+  const operationToStreamMethod = (operation: ParsedOperation) => {
+    const args = buildOptionsArgs(operation)
+    const errors = ["HttpClientError.HttpClientError", "ParseError"]
+    if (operation.errorSchemas.size > 0) {
+      errors.push(...Array.from(operation.errorSchemas.values()))
+    }
+    return `readonly "${operation.id}Stream": (${
+      args.join(", ")
+    }) => Stream.Stream<typeof ${operation.streamSchema}.Type, ${errors.join(" | ")}>`
+  }
+
   const operationsToImpl = (
     name: string,
     operations: ReadonlyArray<ParsedOperation>
-  ) =>
-    `${unexpectedStatusSource}
+  ) => {
+    const methods: Array<string> = []
+    for (const op of operations) {
+      methods.push(operationToImpl(op))
+      if (op.streamSchema) {
+        methods.push(operationToStreamImpl(op))
+      }
+    }
+    return `${unexpectedStatusSource}
 
 export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
-  ${operations.map(operationToImpl).join(",\n  ")}
+  ${methods.join(",\n  ")}
 })`
+  }
 
   const operationToImpl = (operation: ParsedOperation) => {
     const args: Array<string> = [...operation.pathIds, "options"]
@@ -483,6 +530,48 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
       `)\n    ).pipe(\n      ` +
       `Effect.flatMap(${matchStatus}),\n      ` +
       `Effect.scoped,\n    )`
+    )
+  }
+
+  const operationToStreamImpl = (operation: ParsedOperation) => {
+    const args: Array<string> = [...operation.pathIds, "options"]
+
+    const requestPipeline: Array<string> = []
+    if (operation.params) {
+      if (operation.urlParams.length > 0) {
+        const props = operation.urlParams.map(
+          (param) => `"${param}": options.params?.["${param}"] as any`
+        )
+        requestPipeline.push(`HttpClientRequest.setUrlParams({ ${props.join(", ")} })`)
+      }
+    }
+    requestPipeline.push(`HttpClientRequest.setHeaders(options?.headers ?? {})`)
+
+    if (operation.payload && !operation.payloadFormData) {
+      requestPipeline.push(`HttpClientRequest.schemaBodyJson(${operation.payload})(options.payload)`)
+      return (
+        `"${operation.id}Stream": (${args.join(", ")}) =>\n    ` +
+        `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate}).pipe(\n      ` +
+        `${requestPipeline.join(",\n      ")},\n      ` +
+        `Effect.flatMap((request) => httpClient.execute(request)),\n      ` +
+        `Effect.map((response) => response.stream),\n      ` +
+        `Stream.unwrapScoped,\n      ` +
+        `Stream.decodeText(),\n      ` +
+        `Stream.pipeThroughChannel(Sse.makeChannel()),\n      ` +
+        `Stream.mapEffect((event) => Schema.decode(Schema.parseJson(${operation.streamSchema}))(event.data)),\n    )`
+      )
+    }
+    return (
+      `"${operation.id}Stream": (${args.join(", ")}) =>\n    ` +
+      `httpClient.execute(\n      ` +
+      `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate}).pipe(\n        ` +
+      `${requestPipeline.join(",\n        ")},\n      ` +
+      `)\n    ).pipe(\n      ` +
+      `Effect.map((response) => response.stream),\n      ` +
+      `Stream.unwrapScoped,\n      ` +
+      `Stream.decodeText(),\n      ` +
+      `Stream.pipeThroughChannel(Sse.makeChannel()),\n      ` +
+      `Stream.mapEffect((event) => Schema.decode(Schema.parseJson(${operation.streamSchema}))(event.data)),\n    )`
     )
   }
 
