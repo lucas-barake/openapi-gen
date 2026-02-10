@@ -49,14 +49,15 @@ const syncCommand = Command.make(
       const barrelExports: Array<string> = []
 
       for (const [tag, mod] of result.modules) {
-        const filename = `${toKebabCase(tag)}.ts`
+        const basename = tag === "_common" ? "_common" : toKebabCase(tag)
+        const filename = `${basename}.ts`
         const fullPath = path.join(outdir, filename)
         yield* fs.writeFileString(fullPath, mod.source)
         yield* Console.log(`[generated] ${filename}`)
 
         if (tag !== "_common") {
           barrelExports.push(
-            `export * as Generated${identifier(tag)}Api from "./${toKebabCase(tag)}${ext}"`
+            `export * as Generated${identifier(tag)}Api from "./${basename}${ext}"`
           )
         }
       }
@@ -67,11 +68,11 @@ const syncCommand = Command.make(
     })
 ).pipe(Command.withDescription("Generate typed client from an OpenAPI spec"))
 
-const openapigen = Command.make("openapigen").pipe(
+export const openapigen = Command.make("openapigen").pipe(
   Command.withSubcommands([syncCommand])
 )
 
-const run = Command.run(openapigen, {
+export const run = Command.run(openapigen, {
   name: "openapigen",
   version: "0.0.0"
 })
