@@ -1,5 +1,11 @@
 # @lucas-barake/openapi-gen
 
+## 0.4.3
+
+### Patch Changes
+
+- [#18](https://github.com/lucas-barake/openapi-gen/pull/18) [`dbff4f7`](https://github.com/lucas-barake/openapi-gen/commit/dbff4f748d97d7b6f9bc58878005c4663c798d6f) Thanks [@lucas-barake](https://github.com/lucas-barake)! - fix dynamic require of "fs" error in published package
+
 ## 0.4.2
 
 ### Patch Changes
