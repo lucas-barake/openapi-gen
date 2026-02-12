@@ -390,6 +390,43 @@ describe("E2E", () => {
         })
       ))
 
+    it.effect("optional query parameters can be omitted entirely", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            baseSpec({
+              "/pets": {
+                get: {
+                  operationId: "listPets",
+                  parameters: [
+                    { name: "page", in: "query", required: false, schema: { type: "integer" } }
+                  ],
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "array", items: { type: "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            })
+          )
+
+          const mod = evalGenerated(result)
+          const client = mod.make(
+            mockHttpClient([
+              { method: "GET", path: "/pets", status: 200, body: ["Fido"] }
+            ])
+          )
+          const data = yield* client.listPets()
+          expect(data).toEqual(["Fido"])
+        })
+      ))
+
     it.effect("header parameters", () =>
       asAny(() =>
         Effect.gen(function*() {
@@ -2062,6 +2099,103 @@ describe("E2E", () => {
           )
           const data = yield* client.getItem("item-1")
           expect(data).toEqual({ id: "item-1", status: "active" })
+        })
+      ))
+  })
+
+  describe("codegen correctness", () => {
+    it.effect("success handlers in matchStatus are wrapped to preserve type inference", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            baseSpec({
+              "/pets": {
+                get: {
+                  operationId: "listPets",
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "array", items: { type: "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            })
+          )
+
+          const source = [...result.modules.values()][0].source
+          expect(source).toContain("\"2xx\": (response) => HttpClientResponse.schemaBodyJson(")
+        })
+      ))
+
+    it.effect("interface includes HttpBodyError for operations with request body", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            baseSpec({
+              "/pets": {
+                post: {
+                  operationId: "createPet",
+                  requestBody: {
+                    content: {
+                      "application/json": {
+                        schema: {
+                          type: "object",
+                          properties: { name: { type: "string" } },
+                          required: ["name"]
+                        }
+                      }
+                    }
+                  },
+                  responses: {
+                    "201": {
+                      description: "Created",
+                      content: {
+                        "application/json": {
+                          schema: { type: "object", properties: { id: { type: "string" } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            })
+          )
+
+          const source = [...result.modules.values()][0].source
+          expect(source).toContain("HttpBody.HttpBodyError")
+        })
+      ))
+
+    it.effect("interface omits HttpBodyError for operations without request body", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(
+            baseSpec({
+              "/pets": {
+                get: {
+                  operationId: "listPets",
+                  responses: {
+                    "200": {
+                      description: "OK",
+                      content: {
+                        "application/json": {
+                          schema: { type: "array", items: { type: "string" } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            })
+          )
+
+          const source = [...result.modules.values()][0].source
+          expect(source).not.toContain("HttpBodyError")
         })
       ))
   })
