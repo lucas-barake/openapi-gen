@@ -8,5 +8,6 @@ export default defineConfig({
   banner: {
     js: "#!/usr/bin/env node"
   },
-  treeshake: "smallest"
+  treeshake: "smallest",
+  external: ["swagger2openapi"]
 })

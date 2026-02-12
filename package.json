@@ -51,13 +51,13 @@
     "effect": "^3.19.16",
     "esbuild": "^0.27.3",
     "oxlint": "^1.42.0",
-    "swagger2openapi": "^7.0.8",
     "tsup": "^8.4.0",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "swagger2openapi": "^7.0.8",
     "yaml": "^2.8.0"
   }
 }
