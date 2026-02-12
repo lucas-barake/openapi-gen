@@ -287,7 +287,8 @@ describe("CLI integration", () => {
       expect(common).toContain("Shared")
 
       const tagA = yield* fs.readFileString(path.join(outDir, "tag-a.ts"))
-      expect(tagA).toContain("export { Shared } from \"./_common.js\"")
+      expect(tagA).toContain("import { Shared } from \"./_common.js\"")
+      expect(tagA).toContain("export { Shared }")
     }).pipe(Effect.provide(TestEnv)))
 
   it.scoped("sync with --url fetches and generates from remote spec", () =>

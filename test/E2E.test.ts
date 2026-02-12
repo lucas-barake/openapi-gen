@@ -1810,4 +1810,259 @@ describe("E2E", () => {
         })
       ))
   })
+
+  describe("shared error schema with $ref dependencies (FastAPI pattern)", () => {
+    const fastApiSpec = specWithComponents(
+      {
+        "/pets": {
+          post: {
+            operationId: "createPet",
+            tags: ["pets"],
+            requestBody: {
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["name"],
+                    properties: { name: { type: "string" } }
+                  }
+                }
+              }
+            },
+            responses: {
+              "201": {
+                description: "Created",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: { id: { type: "string" }, name: { type: "string" } }
+                    }
+                  }
+                }
+              },
+              "422": {
+                description: "Validation Error",
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/HTTPValidationError" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/users": {
+          post: {
+            operationId: "createUser",
+            tags: ["users"],
+            requestBody: {
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["email"],
+                    properties: { email: { type: "string" } }
+                  }
+                }
+              }
+            },
+            responses: {
+              "201": {
+                description: "Created",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: { id: { type: "string" }, email: { type: "string" } }
+                    }
+                  }
+                }
+              },
+              "422": {
+                description: "Validation Error",
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/HTTPValidationError" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        schemas: {
+          ValidationError: {
+            type: "object",
+            required: ["loc", "msg", "type"],
+            properties: {
+              loc: {
+                type: "array",
+                items: { anyOf: [{ type: "string" }, { type: "integer" }] }
+              },
+              msg: { type: "string" },
+              type: { type: "string" }
+            }
+          },
+          HTTPValidationError: {
+            type: "object",
+            properties: {
+              detail: {
+                type: "array",
+                items: { $ref: "#/components/schemas/ValidationError" }
+              }
+            }
+          }
+        }
+      }
+    )
+
+    it.effect("_common includes transitive $ref dependencies", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(fastApiSpec)
+
+          expect(result.modules.has("_common")).toBe(true)
+          const common = result.modules.get("_common")!
+          expect(common.source).toContain("ValidationError")
+
+          const mod = evalGenerated(result, "pets")
+          expect(mod.HTTPValidationError).toBeDefined()
+          expect(mod.ValidationError).toBeDefined()
+        })
+      ))
+
+    it.effect("tag module can use shared error schema at runtime", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(fastApiSpec)
+
+          const mod = evalGenerated(result, "pets")
+          const client = mod.make(
+            mockHttpClient([
+              {
+                method: "POST",
+                path: "/pets",
+                status: 422,
+                body: {
+                  detail: [{ loc: ["body", "name"], msg: "field required", type: "value_error.missing" }]
+                }
+              }
+            ])
+          )
+          const exit = yield* client.createPet({ payload: { name: "Fido" } }).pipe(Effect.exit)
+          expect(exit._tag).toBe("Failure")
+          if (exit._tag !== "Failure") return
+          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          expect(error._tag).toBe("HTTPValidationError")
+        })
+      ))
+
+    it.effect("tag module imports (not just re-exports) shared schemas", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(fastApiSpec)
+
+          const petsSource = result.modules.get("pets")!.source
+          expect(petsSource).toContain("import { HTTPValidationError, HTTPValidationErrorBody } from")
+        })
+      ))
+  })
+
+  describe("shared schema with inline enum dependencies", () => {
+    const enumSpec = specWithComponents(
+      {
+        "/items/{itemId}": {
+          get: {
+            operationId: "getItem",
+            tags: ["items"],
+            parameters: [
+              { name: "itemId", in: "path", required: true, schema: { type: "string" } }
+            ],
+            responses: {
+              "200": {
+                description: "OK",
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/Item" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "/orders/{orderId}/item": {
+          get: {
+            operationId: "getOrderItem",
+            tags: ["orders"],
+            parameters: [
+              { name: "orderId", in: "path", required: true, schema: { type: "string" } }
+            ],
+            responses: {
+              "200": {
+                description: "OK",
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/Item" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      {
+        schemas: {
+          Item: {
+            type: "object",
+            required: ["id", "status"],
+            properties: {
+              id: { type: "string" },
+              status: {
+                type: "string",
+                enum: ["active", "inactive", "archived"]
+              }
+            }
+          }
+        }
+      }
+    )
+
+    it.effect("_common includes inline enum dependencies of shared schemas", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(enumSpec)
+
+          expect(result.modules.has("_common")).toBe(true)
+          const common = result.modules.get("_common")!
+          expect(common.source).toContain("ItemStatus")
+          expect(common.source).toContain("Item")
+        })
+      ))
+
+    it.effect("tag module can use shared schema with inline enum at runtime", () =>
+      asAny(() =>
+        Effect.gen(function*() {
+          const result = yield* generate(enumSpec)
+
+          const mod = evalGenerated(result, "items")
+          expect(mod.Item).toBeDefined()
+          expect(mod.ItemStatus).toBeDefined()
+
+          const client = mod.make(
+            mockHttpClient([
+              {
+                method: "GET",
+                path: "/items/item-1",
+                status: 200,
+                body: { id: "item-1", status: "active" }
+              }
+            ])
+          )
+          const data = yield* client.getItem("item-1")
+          expect(data).toEqual({ id: "item-1", status: "active" })
+        })
+      ))
+  })
 })

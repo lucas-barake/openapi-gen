@@ -360,8 +360,9 @@ export const make = Effect.gen(function*() {
           }
         }
         const allReexports = [...commonReexports, ...errorBodyNames]
+        const commonImportPath = `./_common${options.ext ?? ".js"}`
         const commonReexportLine = allReexports.length > 0
-          ? `export { ${allReexports.join(", ")} } from "./_common${options.ext ?? ".js"}"`
+          ? `import { ${allReexports.join(", ")} } from "${commonImportPath}"\nexport { ${allReexports.join(", ")} }`
           : ""
 
         const hasStreaming = ops.some((op) => !!op.streamSchema)
@@ -458,6 +459,7 @@ export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
         .join(" | ")
     }
     const errors = ["HttpClientError.HttpClientError", "ParseError"]
+    if (operation.payload) errors.push("HttpBody.HttpBodyError")
     if (operation.errorSchemas.size > 0) {
       errors.push(
         ...Array.from(operation.errorSchemas.values())
@@ -471,6 +473,7 @@ export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
   const operationToStreamMethod = (operation: ParsedOperation) => {
     const args = buildOptionsArgs(operation)
     const errors = ["HttpClientError.HttpClientError", "ParseError"]
+    if (operation.payload) errors.push("HttpBody.HttpBodyError")
     if (operation.errorSchemas.size > 0) {
       errors.push(...Array.from(operation.errorSchemas.values()))
     }
@@ -504,13 +507,13 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
     if (operation.params) {
       if (operation.urlParams.length > 0) {
         const props = operation.urlParams.map(
-          (param) => `"${param}": options.params?.["${param}"] as any`
+          (param) => `"${param}": options?.params?.["${param}"] as any`
         )
         requestPipeline.push(`HttpClientRequest.setUrlParams({ ${props.join(", ")} })`)
       }
       if (operation.headers.length > 0) {
         const props = operation.headers.map(
-          (param) => `"${param}": options.params?.["${param}"] ?? undefined`
+          (param) => `"${param}": options?.params?.["${param}"] ?? undefined`
         )
         requestPipeline.push(`HttpClientRequest.setHeaders({ ${props.join(", ")} })`)
       }
@@ -521,7 +524,7 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
     const singleSuccessCode = operation.successSchemas.size === 1
     operation.successSchemas.forEach((schema, status) => {
       const statusCode = singleSuccessCode && status.startsWith("2") ? "2xx" : status
-      decodes.push(`"${statusCode}": HttpClientResponse.schemaBodyJson(${schema})`)
+      decodes.push(`"${statusCode}": (response) => HttpClientResponse.schemaBodyJson(${schema})(response)`)
     })
     operation.errorSchemas.forEach((schema, status) => {
       if (operation.objectErrorSchemas.has(schema)) {
@@ -576,7 +579,7 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
     if (operation.params) {
       if (operation.urlParams.length > 0) {
         const props = operation.urlParams.map(
-          (param) => `"${param}": options.params?.["${param}"] as any`
+          (param) => `"${param}": options?.params?.["${param}"] as any`
         )
         requestPipeline.push(`HttpClientRequest.setUrlParams({ ${props.join(", ")} })`)
       }
@@ -615,6 +618,7 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
     imports: [
       "import type * as HttpClient from \"@effect/platform/HttpClient\"",
       "import * as HttpClientError from \"@effect/platform/HttpClientError\"",
+      "import type * as HttpBody from \"@effect/platform/HttpBody\"",
       "import type * as Headers from \"@effect/platform/Headers\"",
       "import * as HttpClientRequest from \"@effect/platform/HttpClientRequest\"",
       "import * as HttpClientResponse from \"@effect/platform/HttpClientResponse\"",
