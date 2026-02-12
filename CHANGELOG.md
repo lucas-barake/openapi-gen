@@ -1,5 +1,11 @@
 # @lucas-barake/openapi-gen
 
+## 0.4.4
+
+### Patch Changes
+
+- [#20](https://github.com/lucas-barake/openapi-gen/pull/20) [`d737ac9`](https://github.com/lucas-barake/openapi-gen/commit/d737ac908dfd08680eb10d380dae3fd52e13bbd1) Thanks [@lucas-barake](https://github.com/lucas-barake)! - fix shared schema dependency resolution, type inference, and codegen correctness
+
 ## 0.4.3
 
 ### Patch Changes
