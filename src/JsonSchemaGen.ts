@@ -455,15 +455,85 @@ const make = Effect.gen(function*() {
     return schema
   }
 
+  const collectDeps = (schema: JsonSchema.JsonSchema, parentName: string): Array<string> => {
+    const deps: Array<string> = []
+    const walk = (s: JsonSchema.JsonSchema, currentId: string | undefined) => {
+      s = cleanupSchema(s)
+      if (typeof s !== "object" || s === null) return
+      if ("$ref" in s) {
+        if (s.$ref.startsWith("#")) deps.push(identifier(s.$ref.split("/").pop()!))
+        return
+      }
+      if ("properties" in s) {
+        Object.entries(s.properties).forEach(([key, propSchema]) => {
+          walk(propSchema, currentId ? currentId + identifier(key) : undefined)
+        })
+        return
+      }
+      if ("enum" in s && !("const" in s)) {
+        if (currentId && enums.has(currentId)) deps.push(currentId)
+        else if (currentId && enums.has(currentId + "Enum")) deps.push(currentId + "Enum")
+        return
+      }
+      const enumSuffix = currentId?.endsWith("Enum") ? "" : "Enum"
+      if ("allOf" in s) {
+        if (currentId && store.has(currentId)) deps.push(currentId)
+        s.allOf.forEach((item: any) => walk(item, currentId ? currentId + enumSuffix : undefined))
+        return
+      }
+      if ("anyOf" in s) {
+        s.anyOf.forEach((item: any) => walk(item, currentId ? currentId + enumSuffix : undefined))
+        return
+      }
+      if ("oneOf" in s) {
+        ;(s as any).oneOf.forEach((item: any) => walk(item, currentId ? currentId + enumSuffix : undefined))
+        return
+      }
+      if ("type" in s && s.type === "array") {
+        if (Array.isArray(s.items)) s.items.forEach((item) => walk(item, undefined))
+        else if (s.items && typeof s.items === "object") walk(s.items as any, undefined)
+        if ("prefixItems" in s && Array.isArray((s as any).prefixItems)) {
+          ;(s as any).prefixItems.forEach((item: any) => walk(item, undefined))
+        }
+        return
+      }
+    }
+    walk(schema, "properties" in schema ? parentName : undefined)
+    return deps
+  }
+
+  const expandFilter = (filter: ReadonlySet<string>): Set<string> => {
+    const expanded = new Set(filter)
+    const queue = [...filter]
+    while (queue.length > 0) {
+      const name = queue.pop()!
+      const schema = store.get(name)
+      if (!schema) continue
+      for (const ref of collectDeps(schema, name)) {
+        if (!expanded.has(ref) && store.has(ref)) {
+          expanded.add(ref)
+          queue.push(ref)
+        }
+      }
+    }
+    return expanded
+  }
+
   const generate = (importName: string, filter?: ReadonlySet<string>) =>
     Effect.sync(() => {
+      const resolved = filter ? expandFilter(filter) : undefined
       const schemas = pipe(
         store.entries(),
-        Arr.filter(([name]) => filter === undefined || filter.has(name)),
+        Arr.filter(([name]) => resolved === undefined || resolved.has(name)),
         Arr.filterMap(([name, schema]) => topLevelSource(importName, name, schema)),
         Arr.join("\n\n")
       )
-      const brandDecls = [...brands.values()].join("\n\n")
+      const brandDecls = pipe(
+        brands.entries(),
+        Arr.filter(([name]) => new RegExp(`\\b${name}\\b`).test(schemas)),
+        Arr.map(([_, source]) => source),
+        Arr.join("\n\n")
+      )
       return brandDecls ? `${brandDecls}\n\n${schemas}` : schemas
     })
 

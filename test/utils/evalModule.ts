@@ -57,7 +57,7 @@ const stripSource = (source: string): string => {
 
   result = result.replace(/^export type \w+.*$/gm, "")
 
-  result = result.replace(/^export \{[^}]*\} from "[^"]*"$/gm, "")
+  result = result.replace(/^export \{[^}]*\}(?: from "[^"]*")?$/gm, "")
 
   result = result.replace(/^export (class|const) /gm, "$1 ")
 

@@ -1284,7 +1284,8 @@ describe("OpenApi", () => {
         expect(common.source).toContain("Error")
 
         const petsModule = result.modules.get("pets")!
-        expect(petsModule.source).toContain("export { Error } from \"./_common.js\"")
+        expect(petsModule.source).toContain("import { Error } from \"./_common.js\"")
+        expect(petsModule.source).toContain("export { Error }")
       }).pipe(Effect.provide(OpenApi.Live)))
 
     it.effect("single-tag spec produces no _common module", () =>
@@ -1470,7 +1471,8 @@ describe("OpenApi", () => {
 
         const petsModule = result.modules.get("pets")!
         expect(petsModule.source).toContain("ApiErrorBody")
-        expect(petsModule.source).toMatch(/export \{[^}]*ApiErrorBody[^}]*\} from ".\/_common\.js"/)
+        expect(petsModule.source).toMatch(/import \{[^}]*ApiErrorBody[^}]*\} from ".\/_common\.js"/)
+        expect(petsModule.source).toMatch(/export \{[^}]*ApiErrorBody[^}]*\}/)
       }).pipe(Effect.provide(OpenApi.Live)))
   })
 
@@ -1692,7 +1694,7 @@ describe("OpenApi", () => {
         const chatModule = result.modules.get("chat")!
         expect(chatModule.source).toContain("Chat400")
         expect(chatModule.source).toContain(
-          "Stream.Stream<typeof ChatStreamEvent.Type, HttpClientError.HttpClientError | ParseError | Chat400>"
+          "Stream.Stream<typeof ChatStreamEvent.Type, HttpClientError.HttpClientError | ParseError | HttpBody.HttpBodyError | Chat400>"
         )
       }).pipe(Effect.provide(OpenApi.Live)))
   })
