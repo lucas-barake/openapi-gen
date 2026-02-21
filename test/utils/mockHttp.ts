@@ -1,6 +1,4 @@
-import * as HttpClient from "@effect/platform/HttpClient"
-import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
-import * as HttpClientResponse from "@effect/platform/HttpClientResponse"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import * as Effect from "effect/Effect"
 
 const makeResponse = (
@@ -27,7 +25,7 @@ export const mockHttpClient = (
     readonly headers?: Record<string, string>
   }>
 ): HttpClient.HttpClient =>
-  HttpClient.make((request, url) => {
+  HttpClient.make((request: HttpClientRequest.HttpClientRequest, url: URL) => {
     const pathname = url.pathname + url.search
     const route = routes.find(
       (r) =>
@@ -47,7 +45,7 @@ export const mockSseClient = (
     readonly events: Array<unknown>
   }>
 ): HttpClient.HttpClient =>
-  HttpClient.make((request, url) => {
+  HttpClient.make((request: HttpClientRequest.HttpClientRequest, url: URL) => {
     const pathname = url.pathname
     const route = routes.find(
       (r) =>
@@ -98,7 +96,7 @@ export const mockHttpClientWithCapture = (
   readonly requests: Array<{ readonly url: URL; readonly request: HttpClientRequest.HttpClientRequest }>
 } => {
   const requests: Array<{ readonly url: URL; readonly request: HttpClientRequest.HttpClientRequest }> = []
-  const client = HttpClient.make((request, url) => {
+  const client = HttpClient.make((request: HttpClientRequest.HttpClientRequest, url: URL) => {
     requests.push({ url, request })
     const pathname = url.pathname + url.search
     const route = routes.find(

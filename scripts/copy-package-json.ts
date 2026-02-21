@@ -1,13 +1,16 @@
-import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem"
-import { FileSystem } from "@effect/platform/FileSystem"
-import { Effect, pipe } from "effect"
+import { NodeFileSystem } from "@effect/platform-node"
+import * as FileSystem from "effect/FileSystem"
+import { Effect } from "effect"
 import * as path from "node:path"
 
-const read = pipe(
-  FileSystem,
-  Effect.flatMap((fileSystem) => fileSystem.readFileString("package.json")),
-  Effect.map((_) => JSON.parse(_)),
-  Effect.map((json) => ({
+const pathTo = path.join("dist", "package.json")
+
+const program = Effect.gen(function*() {
+  const fs = yield* FileSystem.FileSystem
+  console.log(`copying package.json to ${pathTo}...`)
+  const content = yield* fs.readFileString("package.json")
+  const json = JSON.parse(content)
+  const trimmed = {
     name: json.name,
     version: json.version,
     description: json.description,
@@ -18,22 +21,8 @@ const read = pipe(
     license: json.license,
     keywords: json.keywords,
     dependencies: json.dependencies
-  }))
-)
-
-const pathTo = path.join("dist", "package.json")
-
-const write = (pkg: object) =>
-  pipe(
-    FileSystem,
-    Effect.flatMap((fileSystem) => fileSystem.writeFileString(pathTo, JSON.stringify(pkg, null, 2)))
-  )
-
-const program = pipe(
-  Effect.sync(() => console.log(`copying package.json to ${pathTo}...`)),
-  Effect.flatMap(() => read),
-  Effect.flatMap(write),
-  Effect.provide(NodeFileSystem.layer)
-)
+  }
+  yield* fs.writeFileString(pathTo, JSON.stringify(trimmed, null, 2))
+}).pipe(Effect.provide(NodeFileSystem.layer))
 
 Effect.runPromise(program)

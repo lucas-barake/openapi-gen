@@ -1,7 +1,6 @@
-import * as HttpClientError from "@effect/platform/HttpClientError"
+import { HttpClientError } from "effect/unstable/http"
 import { describe, expect, it } from "@effect/vitest"
 import * as Cause from "effect/Cause"
-import * as Chunk from "effect/Chunk"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import * as Stream from "effect/Stream"
@@ -953,7 +952,7 @@ describe("E2E", () => {
           const exit = yield* client.getPet("nonexistent").pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
           if (exit._tag !== "Failure") return
-          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause)) as any
           expect(error._tag).toBe("GetPet404")
           expect(error.message).toBe("Not found")
           expect(error.code).toBe("PET_NOT_FOUND")
@@ -1003,7 +1002,7 @@ describe("E2E", () => {
           const exit = yield* client.getStatus().pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
           if (exit._tag !== "Failure") return
-          const error = Option.getOrThrow(Cause.failureOption(exit.cause))
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause))
           expect(error).toBe("Bad request message")
         })
       ))
@@ -1039,9 +1038,9 @@ describe("E2E", () => {
           const exit401 = yield* client401.deletePet("1").pipe(Effect.exit)
           expect(exit401._tag).toBe("Failure")
           if (exit401._tag !== "Failure") return
-          const error401 = Option.getOrThrow(Cause.failureOption(exit401.cause)) as any
-          expect(error401).toBeInstanceOf(HttpClientError.ResponseError)
-          expect(error401.reason).toBe("StatusCode")
+          const error401 = Option.getOrThrow(Cause.findErrorOption(exit401.cause)) as any
+          expect(error401).toBeInstanceOf(HttpClientError.HttpClientError)
+          expect(error401.reason._tag).toBe("StatusCodeError")
 
           const client204 = mod.make(
             mockHttpClient([
@@ -1085,9 +1084,9 @@ describe("E2E", () => {
           const exit = yield* client.listPets().pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
           if (exit._tag !== "Failure") return
-          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
-          expect(error).toBeInstanceOf(HttpClientError.ResponseError)
-          expect(error.reason).toBe("StatusCode")
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause)) as any
+          expect(error).toBeInstanceOf(HttpClientError.HttpClientError)
+          expect(error.reason._tag).toBe("StatusCodeError")
         })
       ))
 
@@ -1145,7 +1144,7 @@ describe("E2E", () => {
           const exit = yield* client.getUser("123").pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
           if (exit._tag !== "Failure") return
-          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause)) as any
           expect(error._tag).toBe("NotFoundError")
           expect(error.message).toBe("User not found")
         })
@@ -1213,7 +1212,7 @@ describe("E2E", () => {
           const exit = yield* client.findUser("123").pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
           if (exit._tag !== "Failure") return
-          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause)) as any
           expect(error._tag).toBe("FindUser400")
           expect(error.message).toBe("Invalid")
           expect(error.details).toBe("Bad ID")
@@ -1276,7 +1275,7 @@ describe("E2E", () => {
           const exit = yield* client.lookupUser("123").pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
           if (exit._tag !== "Failure") return
-          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause)) as any
           expect(error._tag).toBe("LookupUser404")
           expect(error.message).toBe("Not found")
         })
@@ -1344,7 +1343,7 @@ describe("E2E", () => {
           const chunks = yield* client.createChatCompletionStream({
             payload: { messages: ["hello"] }
           }).pipe(Stream.runCollect)
-          expect(Chunk.toArray(chunks)).toEqual([
+          expect(chunks).toEqual([
             { delta: "Hello" },
             { delta: " world" }
           ])
@@ -1402,7 +1401,7 @@ describe("E2E", () => {
           const chunks = yield* client.streamOnlyStream({
             payload: { msg: "hello" }
           }).pipe(Stream.runCollect)
-          expect(Chunk.toArray(chunks)).toEqual([
+          expect(chunks).toEqual([
             { delta: "chunk1" },
             { delta: "chunk2" }
           ])
@@ -1593,7 +1592,7 @@ describe("E2E", () => {
         })
       ))
 
-    it.effect("boolean schema items: true produces Schema.Unknown array", () =>
+    it.effect("boolean schema items: true produces Schema.Json array", () =>
       asAny(() =>
         Effect.gen(function*() {
           const result = yield* generate(
@@ -1841,7 +1840,7 @@ describe("E2E", () => {
           const exit = yield* client.listPets().pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
           if (exit._tag !== "Failure") return
-          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause)) as any
           expect(error._tag).toBe("ApiError")
           expect(error.message).toBe("Validation failed")
         })
@@ -1991,7 +1990,7 @@ describe("E2E", () => {
           const exit = yield* client.createPet({ payload: { name: "Fido" } }).pipe(Effect.exit)
           expect(exit._tag).toBe("Failure")
           if (exit._tag !== "Failure") return
-          const error = Option.getOrThrow(Cause.failureOption(exit.cause)) as any
+          const error = Option.getOrThrow(Cause.findErrorOption(exit.cause)) as any
           expect(error._tag).toBe("HTTPValidationError")
         })
       ))

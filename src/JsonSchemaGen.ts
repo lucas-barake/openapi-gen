@@ -1,11 +1,11 @@
-import type * as JsonSchema from "@effect/platform/OpenApiJsonSchema"
 import * as Arr from "effect/Array"
-import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
 import { pipe } from "effect/Function"
 import * as Layer from "effect/Layer"
 import * as Option from "effect/Option"
+import * as ServiceMap from "effect/ServiceMap"
 import * as Struct from "effect/Struct"
+import type * as JsonSchema from "./OpenApiJsonSchema.js"
 import { brandNameForId, identifier, isIdField, nonEmptyString, toComment } from "./Utils.js"
 
 const make = Effect.gen(function*() {
@@ -37,7 +37,7 @@ const make = Effect.gen(function*() {
       Array.isArray(schema.oneOf) &&
       schema.oneOf.length === 0
     ) {
-      schema = Struct.omit(schema, "oneOf") as any
+      schema = Struct.omit(schema, ["oneOf"]) as any
     }
 
     if (
@@ -47,15 +47,15 @@ const make = Effect.gen(function*() {
     ) {
       if ("allOf" in schema) {
         const item = schema.allOf[0]
-        schema = Struct.omit(schema, "allOf") as any
+        schema = Struct.omit(schema, ["allOf"]) as any
         Object.assign(schema, item)
       } else if ("anyOf" in schema) {
         const item = schema.anyOf[0]
-        schema = Struct.omit(schema, "anyOf") as any
+        schema = Struct.omit(schema, ["anyOf"]) as any
         Object.assign(schema, item)
       } else {
         const item = (schema as any).oneOf[0]
-        schema = Struct.omit(schema as any, "oneOf") as any
+        schema = Struct.omit(schema as any, ["oneOf"]) as any
         Object.assign(schema, item)
       }
     }
@@ -67,8 +67,7 @@ const make = Effect.gen(function*() {
   const addSchema = (
     name: string,
     root: JsonSchema.JsonSchema,
-    context?: object,
-    asStruct = false
+    context?: object
   ): string => {
     root = cleanupSchema(root)
 
@@ -85,7 +84,7 @@ const make = Effect.gen(function*() {
         }
         seenRefs.add(schema.$ref)
 
-        const resolved = resolveRef(schema, {
+        const resolved = resolveRef(schema as JsonSchema.Ref, {
           ...root,
           ...context
         })
@@ -100,7 +99,7 @@ const make = Effect.gen(function*() {
         store.set(resolved.name, resolved.schema)
         classes.add(resolved.name)
       } else if ("properties" in schema) {
-        Object.entries(schema.properties).forEach(([name, s]) =>
+        Object.entries(schema.properties as Record<string, JsonSchema.JsonSchema>).forEach(([name, s]) =>
           addRefs(s, childName ? childName + identifier(name) : undefined)
         )
       } else if ("type" in schema && schema.type === "array") {
@@ -124,7 +123,7 @@ const make = Effect.gen(function*() {
           addRefs(resolved, undefined)
         }
       } else if ("anyOf" in schema) {
-        schema.anyOf.forEach((s) => addRefs(s as any, childName ? childName + enumSuffix : undefined))
+        schema.anyOf.forEach((s: JsonSchema.JsonSchema) => addRefs(s, childName ? childName + enumSuffix : undefined))
       } else if ("oneOf" in schema) {
         ;(schema as any).oneOf.forEach((s: any) => addRefs(s, childName ? childName + enumSuffix : undefined))
       } else if ("enum" in schema) {
@@ -142,15 +141,9 @@ const make = Effect.gen(function*() {
       const resolved = resolveAllOf(root, { ...root, ...context })
       addRefs(resolved, "properties" in resolved ? name : undefined)
       store.set(name, resolved)
-      if (!asStruct) {
-        classes.add(name)
-      }
     } else {
       addRefs(root, "properties" in root ? name : undefined)
       store.set(name, root)
-      if (!asStruct) {
-        classes.add(name)
-      }
     }
     return name
   }
@@ -231,19 +224,19 @@ const make = Effect.gen(function*() {
     schema = cleanupSchema(schema)
     if (typeof schema !== "object" || schema === null) return Option.none()
     if ("$id" in schema && schema.$id === "/schemas/any") {
-      return Option.some(`${importName}.Unknown`)
+      return Option.some(`${importName}.Json`)
     }
     if ("properties" in schema) {
       const obj = schema as JsonSchema.Object
       const required = obj.required ?? []
       const properties = pipe(
         Object.entries(obj.properties ?? {}),
-        Arr.filterMap(([key, schema]) => {
+        Arr.flatMap(([key, schema]) => {
           const fullSchema = getSchema(schema)
           schema = cleanupSchema(schema)
           const isOptional = !required.includes(key)
           const [enumNullable, filteredSchema] = filterNullable(fullSchema)
-          return toSource(
+          const opt = toSource(
             importName,
             enumNullable ? filteredSchema : schema,
             currentIdentifier + identifier(key)
@@ -254,7 +247,7 @@ const make = Effect.gen(function*() {
                 const brandName = brandNameForId(key, currentIdentifier)
                 if (!brands.has(brandName)) {
                   const baseType = "format" in fullSchema && fullSchema.format === "uuid"
-                    ? `${importName}.UUID`
+                    ? `${importName}.String.pipe(${importName}.check(${importName}.isUUID(undefined)))`
                     : source
                   brands.set(
                     brandName,
@@ -278,6 +271,7 @@ const make = Effect.gen(function*() {
               })
             })
           )
+          return Option.isSome(opt) ? [opt.value] : []
         }),
         Arr.join(transformer.propertySeparator)
       )
@@ -305,7 +299,7 @@ const make = Effect.gen(function*() {
           transformer.onRef({ importName, name: currentIdentifier + "Enum" })
         )
       }
-      const items = schema.enum.map((_) => JSON.stringify(_))
+      const items = (schema.enum as Array<unknown>).map((_: unknown) => JSON.stringify(_))
       return Option.some(
         transformer.onEnum({
           importName,
@@ -357,8 +351,8 @@ const make = Effect.gen(function*() {
       }
       const items = pipe(
         itemSchemas,
-        Arr.filterMap((_) =>
-          toSource(importName, _, currentIdentifier + "Enum").pipe(
+        Arr.flatMap((_) => {
+          const opt = toSource(importName, _, currentIdentifier + "Enum").pipe(
             Option.map(
               (source) =>
                 ({
@@ -368,7 +362,8 @@ const make = Effect.gen(function*() {
                 }) as const
             )
           )
-        )
+          return Option.isSome(opt) ? [opt.value] : []
+        })
       )
       if (items.length === 0) {
         return Option.none()
@@ -379,26 +374,27 @@ const make = Effect.gen(function*() {
     } else if ("type" in schema && schema.type) {
       switch (schema.type) {
         case "string": {
-          return Option.some(transformer.onString({ importName, schema }))
+          return Option.some(transformer.onString({ importName, schema: schema as JsonSchema.String }))
         }
         case "integer":
         case "number": {
-          const minimum = typeof schema.exclusiveMinimum === "number"
-            ? schema.exclusiveMinimum
-            : schema.minimum
-          const exclusiveMinimum = typeof schema.exclusiveMinimum === "boolean"
-            ? schema.exclusiveMinimum
-            : typeof schema.exclusiveMinimum === "number"
-          const maximum = typeof schema.exclusiveMaximum === "number"
-            ? schema.exclusiveMaximum
-            : schema.maximum
-          const exclusiveMaximum = typeof schema.exclusiveMaximum === "boolean"
-            ? schema.exclusiveMaximum
-            : typeof schema.exclusiveMaximum === "number"
+          const numSchema = schema as JsonSchema.Number | JsonSchema.Integer
+          const minimum = typeof numSchema.exclusiveMinimum === "number"
+            ? numSchema.exclusiveMinimum
+            : numSchema.minimum
+          const exclusiveMinimum = typeof numSchema.exclusiveMinimum === "boolean"
+            ? numSchema.exclusiveMinimum
+            : typeof numSchema.exclusiveMinimum === "number"
+          const maximum = typeof numSchema.exclusiveMaximum === "number"
+            ? numSchema.exclusiveMaximum
+            : numSchema.maximum
+          const exclusiveMaximum = typeof numSchema.exclusiveMaximum === "boolean"
+            ? numSchema.exclusiveMaximum
+            : typeof numSchema.exclusiveMaximum === "number"
           return Option.some(
             transformer.onNumber({
               importName,
-              schema,
+              schema: numSchema,
               minimum,
               exclusiveMinimum,
               maximum,
@@ -414,7 +410,10 @@ const make = Effect.gen(function*() {
             const prefixItems = (schema as any).prefixItems as Array<JsonSchema.JsonSchema>
             const elements = pipe(
               prefixItems,
-              Arr.filterMap((item) => toSource(importName, item, currentIdentifier))
+              Arr.flatMap((item) => {
+                const opt = toSource(importName, item, currentIdentifier)
+                return Option.isSome(opt) ? [opt.value] : []
+              })
             )
             const rest = schema.items && typeof schema.items === "object" && !Array.isArray(schema.items)
               ? Option.getOrUndefined(toSource(importName, schema.items, currentIdentifier))
@@ -430,7 +429,7 @@ const make = Effect.gen(function*() {
             Option.map((item) =>
               transformer.onArray({
                 importName,
-                schema,
+                schema: schema as JsonSchema.Array,
                 item,
                 nonEmpty
               })
@@ -465,7 +464,7 @@ const make = Effect.gen(function*() {
         return
       }
       if ("properties" in s) {
-        Object.entries(s.properties).forEach(([key, propSchema]) => {
+        Object.entries(s.properties as Record<string, JsonSchema.JsonSchema>).forEach(([key, propSchema]) => {
           walk(propSchema, currentId ? currentId + identifier(key) : undefined)
         })
         return
@@ -525,7 +524,10 @@ const make = Effect.gen(function*() {
       const schemas = pipe(
         store.entries(),
         Arr.filter(([name]) => resolved === undefined || resolved.has(name)),
-        Arr.filterMap(([name, schema]) => topLevelSource(importName, name, schema)),
+        Arr.flatMap(([name, schema]) => {
+          const opt = topLevelSource(importName, name, schema)
+          return Option.isSome(opt) ? [opt.value] : []
+        }),
         Arr.join("\n\n")
       )
       const brandDecls = pipe(
@@ -546,15 +548,15 @@ const make = Effect.gen(function*() {
   return { addSchema, generate, getSchemaNames, markAsError } as const
 })
 
-export class JsonSchemaGen extends Context.Tag("JsonSchemaGen")<
+export class JsonSchemaGen extends ServiceMap.Service<
   JsonSchemaGen,
-  Effect.Effect.Success<typeof make>
->() {}
+  Effect.Success<typeof make>
+>()("JsonSchemaGen") {}
 
 const with_ = Effect.provideServiceEffect(JsonSchemaGen, make)
 export { with_ as with }
 
-export class JsonSchemaTransformer extends Context.Tag("JsonSchemaTransformer")<
+export class JsonSchemaTransformer extends ServiceMap.Service<
   JsonSchemaTransformer,
   {
     supportsTopLevel(options: {
@@ -650,9 +652,9 @@ export class JsonSchemaTransformer extends Context.Tag("JsonSchemaTransformer")<
       }>
     }): string
   }
->() {}
+>()("JsonSchemaTransformer") {}
 
-export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
+export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer)(() => {
   const applyAnnotations = (
     S: string,
     options: {
@@ -662,22 +664,20 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
     }
   ) =>
   (source: string): string => {
-    // Handle the special case where the `default` value of the property
-    // was set to `null`, but the property was not properly marked as `nullable`
     if (options.isNullable && options.default === null) {
-      return `${S}.optionalWith(${S}.NullOr(${source}), { default: () => null })`
+      return `${S}.NullOr(${source}).pipe(${S}.withDecodingDefault(() => null))`
     }
     const defaultSource = options.default !== undefined && options.default !== null
       ? `() => ${JSON.stringify(options.default)} as const`
       : undefined
     if (options.isOptional) {
       return defaultSource
-        ? `${S}.optionalWith(${source}, { nullable: true, default: ${defaultSource} })`
-        : `${S}.optionalWith(${source}, { nullable: true })`
+        ? `${S}.NullOr(${source}).pipe(${S}.withDecodingDefault(${defaultSource}))`
+        : `${S}.optionalKey(${S}.NullOr(${source}))`
     }
     const newSource = options.isNullable ? `${S}.NullOr(${source})` : source
     if (defaultSource) {
-      return `${newSource}.pipe(${S}.propertySignature, ${S}.withConstructorDefault(${defaultSource}))`
+      return `${newSource}.pipe(${S}.withDecodingDefault(${defaultSource}))`
     }
     return newSource
   }
@@ -693,10 +693,10 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
       if (isError && isObject) {
         return `export const ${name}Body = ${importName}.Struct(${source})\n\n${
           toComment(description)
-        }export class ${name} extends ${importName}.TaggedError<${name}>()("${name}", ${name}Body) {}`
+        }export class ${name} extends ${importName}.TaggedErrorClass<${name}>()("${name}", ${name}Body) {}`
       }
       if (!isObject || !isClass) {
-        return `${toComment(description)}export class ${name} extends ${source} {}`
+        return `${toComment(description)}export const ${name} = ${source}`
       }
       return `${
         toComment(description)
@@ -723,10 +723,13 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
       return `${importName}.Boolean`
     },
     onRecord({ importName }) {
-      return `${importName}.Record({ key: ${importName}.String, value: ${importName}.Unknown })`
+      return `${importName}.Record(${importName}.String, ${importName}.Json)`
     },
     onEnum({ importName, items }) {
-      return `${importName}.Literal(${items.join(", ")})`
+      if (items.length === 1) {
+        return `${importName}.Literal(${items[0]})`
+      }
+      return `${importName}.Literals([${items.join(", ")}])`
     },
     onString({ importName, schema }) {
       if (
@@ -737,14 +740,14 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
       }
       const modifiers: Array<string> = []
       if ("minLength" in schema) {
-        modifiers.push(`${importName}.minLength(${schema.minLength})`)
+        modifiers.push(`${importName}.check(${importName}.isMinLength(${schema.minLength}))`)
       }
       if ("maxLength" in schema) {
-        modifiers.push(`${importName}.maxLength(${schema.maxLength})`)
+        modifiers.push(`${importName}.check(${importName}.isMaxLength(${schema.maxLength}))`)
       }
       if ("pattern" in schema) {
         modifiers.push(
-          `${importName}.pattern(new RegExp(${JSON.stringify(schema.pattern)}))`
+          `${importName}.check(${importName}.isPattern(new RegExp(${JSON.stringify(schema.pattern)})))`
         )
       }
       return `${importName}.String${pipeSource(modifiers)}`
@@ -760,12 +763,12 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
       const modifiers: Array<string> = []
       if (minimum !== undefined) {
         modifiers.push(
-          `${importName}.greaterThan${exclusiveMinimum ? "" : "OrEqualTo"}(${minimum})`
+          `${importName}.check(${importName}.isGreaterThan${exclusiveMinimum ? "" : "OrEqualTo"}(${minimum}))`
         )
       }
       if (maximum !== undefined) {
         modifiers.push(
-          `${importName}.lessThan${exclusiveMaximum ? "" : "OrEqualTo"}(${maximum})`
+          `${importName}.check(${importName}.isLessThan${exclusiveMaximum ? "" : "OrEqualTo"}(${maximum}))`
         )
       }
       return `${importName}.${schema.type === "integer" ? "Int" : "Number"}${pipeSource(modifiers)}`
@@ -773,22 +776,22 @@ export const layerTransformerSchema = Layer.sync(JsonSchemaTransformer, () => {
     onArray({ importName, schema, item, nonEmpty }) {
       const modifiers: Array<string> = []
       if ("minItems" in schema && nonEmpty) {
-        modifiers.push(`${importName}.minItems(${schema.minItems})`)
+        modifiers.push(`${importName}.check(${importName}.isMinLength(${schema.minItems}))`)
       }
       if ("maxItems" in schema) {
-        modifiers.push(`${importName}.maxItems(${schema.maxItems})`)
+        modifiers.push(`${importName}.check(${importName}.isMaxLength(${schema.maxItems}))`)
       }
 
       return `${importName}.${nonEmpty ? "NonEmpty" : ""}Array(${item})${pipeSource(modifiers)}`
     },
     onTuple({ importName, elements, rest }) {
       if (rest !== undefined) {
-        return `${importName}.Tuple([${elements.join(", ")}], ${rest})`
+        return `${importName}.TupleWithRest(${importName}.Tuple([${elements.join(", ")}]), [${rest}])`
       }
-      return `${importName}.Tuple(${elements.join(", ")})`
+      return `${importName}.Tuple([${elements.join(", ")}])`
     },
     onUnion({ importName, items }) {
-      return `${importName}.Union(${items.map((_) => `${toComment(_.description)}${_.source}`).join(",\n")})`
+      return `${importName}.Union([${items.map((_) => `${toComment(_.description)}${_.source}`).join(",\n")}])`
     }
   })
 })
@@ -829,7 +832,7 @@ function resolveAllOf(
 ): JsonSchema.JsonSchema {
   if (typeof schema !== "object" || schema === null) return schema as any
   if ("$ref" in schema) {
-    const resolved = resolveRef(schema, context, resolveRefs)
+    const resolved = resolveRef(schema as JsonSchema.Ref, context, resolveRefs)
     if (!resolved) {
       return schema
     }

@@ -56,7 +56,7 @@ describe("OpenApi", () => {
 
         expect(output).toContain("import * as Schema from \"effect/Schema\"")
         expect(output).toContain(
-          "import * as HttpClientRequest from \"@effect/platform/HttpClientRequest\""
+          "HttpClientRequest, HttpClientResponse } from \"effect/unstable/http\""
         )
         expect(output).toContain("export const make")
         expect(output).toContain("HttpClientRequest.get(`/users`)")
@@ -264,7 +264,7 @@ describe("OpenApi", () => {
         )
 
         expect(output).toContain("const GetUser404Body = Schema.Struct(")
-        expect(output).toContain("Schema.TaggedError<GetUser404>()(\"GetUser404\"")
+        expect(output).toContain("Schema.TaggedErrorClass<GetUser404>()(\"GetUser404\"")
         expect(output).not.toContain("Schema.Class<GetUser404>")
         expect(output).not.toContain("Data.Error")
       }).pipe(Effect.provide(OpenApi.Live)))
@@ -310,7 +310,7 @@ describe("OpenApi", () => {
         )
 
         expect(output).toContain("const GetUser404Body = Schema.Struct(")
-        expect(output).toContain("Schema.TaggedError<GetUser404>()(\"GetUser404\", GetUser404Body)")
+        expect(output).toContain("Schema.TaggedErrorClass<GetUser404>()(\"GetUser404\", GetUser404Body)")
         expect(output).toContain("schemaBodyJson(GetUser404Body)")
         expect(output).toContain("new GetUser404(body)")
       }).pipe(Effect.provide(OpenApi.Live)))
@@ -423,7 +423,7 @@ describe("OpenApi", () => {
           )
         )
 
-        expect(output).toContain("HttpClientRequest.del(`/users/${userId}`)")
+        expect(output).toContain("HttpClientRequest.delete(`/users/${userId}`)")
         expect(output).toContain("Effect.void")
       }).pipe(Effect.provide(OpenApi.Live)))
 
@@ -942,7 +942,7 @@ describe("OpenApi", () => {
           )
         )
 
-        expect(output).toContain("Schema.Tuple(Schema.Number, Schema.Number)")
+        expect(output).toContain("Schema.Tuple([Schema.Number, Schema.Number])")
         expect(output).not.toContain("Schema.Array")
       }).pipe(Effect.provide(OpenApi.Live)))
 
@@ -1538,16 +1538,16 @@ describe("OpenApi", () => {
         expect(chatModule.source).toContain("Stream.Stream<typeof CreateChatCompletionStreamEvent.Type")
       }).pipe(Effect.provide(OpenApi.Live)))
 
-    it.effect("stream method uses Sse.makeChannel pipeline", () =>
+    it.effect("stream method uses Sse.decodeDataSchema pipeline", () =>
       Effect.gen(function*() {
         const api = yield* OpenApi
         const result = yield* api.generate(sseSpec, { name: "Client" })
         const chatModule = result.modules.get("chat")!
 
-        expect(chatModule.source).toContain("Sse.makeChannel()")
+        expect(chatModule.source).toContain("Sse.decodeDataSchema(CreateChatCompletionStreamEvent)")
         expect(chatModule.source).toContain("Stream.decodeText()")
-        expect(chatModule.source).toContain("Stream.unwrapScoped")
-        expect(chatModule.source).toContain("Schema.parseJson(CreateChatCompletionStreamEvent)")
+        expect(chatModule.source).toContain("Stream.unwrap")
+        expect(chatModule.source).toContain("Stream.map((event) => event.data)")
       }).pipe(Effect.provide(OpenApi.Live)))
 
     it.effect("adds Stream and Sse imports only for modules with SSE", () =>
@@ -1603,7 +1603,7 @@ describe("OpenApi", () => {
         )
 
         const streamingModule = result.modules.get("streaming")!
-        expect(streamingModule.source).toContain("import * as Sse from \"@effect/experimental/Sse\"")
+        expect(streamingModule.source).toContain("import * as Sse from \"effect/unstable/encoding/Sse\"")
         expect(streamingModule.source).toContain("import * as Stream from \"effect/Stream\"")
 
         const otherModule = result.modules.get("other")!
@@ -1694,7 +1694,7 @@ describe("OpenApi", () => {
         const chatModule = result.modules.get("chat")!
         expect(chatModule.source).toContain("Chat400")
         expect(chatModule.source).toContain(
-          "Stream.Stream<typeof ChatStreamEvent.Type, HttpClientError.HttpClientError | ParseError | HttpBody.HttpBodyError | Chat400>"
+          "Stream.Stream<typeof ChatStreamEvent.Type, HttpClientError.HttpClientError | Schema.SchemaError | HttpBody.HttpBodyError | Chat400>"
         )
       }).pipe(Effect.provide(OpenApi.Live)))
   })

@@ -49,7 +49,7 @@ export const brandNameForId = (key: string, parentName: string): string => {
 }
 
 export const nonEmptyString = flow(
-  Option.fromNullable<unknown>,
+  Option.fromNullishOr<unknown>,
   Option.filter(String.isString),
   Option.map(String.trim),
   Option.filter(String.isNonEmpty)

@@ -1,32 +1,27 @@
-import * as CliConfig from "@effect/cli/CliConfig"
-import * as Command from "@effect/cli/Command"
-import * as Options from "@effect/cli/Options"
-import * as NodeContext from "@effect/platform-node/NodeContext"
-import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient"
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as HttpClient from "@effect/platform/HttpClient"
-import * as HttpClientRequest from "@effect/platform/HttpClientRequest"
-import * as Path from "@effect/platform/Path"
+import { NodeHttpClient, NodeRuntime, NodeServices } from "@effect/platform-node"
 import * as Console from "effect/Console"
 import * as Effect from "effect/Effect"
-import * as Either from "effect/Either"
 import * as Layer from "effect/Layer"
+import * as Option from "effect/Option"
+import { Command, Flag } from "effect/unstable/cli"
+import { HttpClient, HttpClientRequest } from "effect/unstable/http"
+import * as FileSystem from "effect/FileSystem"
+import * as Path from "effect/Path"
 import * as Yaml from "yaml"
 import { OpenApi } from "./OpenApi.js"
 import { identifier, toKebabCase } from "./Utils.js"
 
-const specOption = Options.fileParse("spec").pipe(
-  Options.withAlias("s"),
-  Options.withDescription("The OpenAPI spec file")
+const specFlag = Flag.fileParse("spec").pipe(
+  Flag.withAlias("s"),
+  Flag.withDescription("The OpenAPI spec file"),
+  Flag.optional
 )
 
-const urlOption = Options.text("url").pipe(
-  Options.withAlias("u"),
-  Options.withDescription("URL to a remote OpenAPI spec (JSON or YAML)")
+const urlFlag = Flag.string("url").pipe(
+  Flag.withAlias("u"),
+  Flag.withDescription("URL to a remote OpenAPI spec (JSON or YAML)"),
+  Flag.optional
 )
-
-const specInput = Options.orElseEither(specOption, urlOption)
 
 const fetchSpec = (url: string) =>
   Effect.gen(function*() {
@@ -40,37 +35,43 @@ const fetchSpec = (url: string) =>
     return isYaml ? Yaml.parse(text) : JSON.parse(text)
   }).pipe(Effect.scoped)
 
-const nameOption = Options.text("name").pipe(
-  Options.withAlias("n"),
-  Options.withDescription("The name of the generated client"),
-  Options.withDefault("Client")
+const nameFlag = Flag.string("name").pipe(
+  Flag.withAlias("n"),
+  Flag.withDescription("The name of the generated client"),
+  Flag.withDefault("Client")
 )
 
-const outdirOption = Options.text("outdir").pipe(
-  Options.withAlias("o"),
-  Options.withDescription("Output directory for generated files"),
-  Options.withDefault(".")
+const outdirFlag = Flag.string("outdir").pipe(
+  Flag.withAlias("o"),
+  Flag.withDescription("Output directory for generated files"),
+  Flag.withDefault(".")
 )
 
-const extOption = Options.text("ext").pipe(
-  Options.withAlias("e"),
-  Options.withDescription("Import extension for generated files (.js, .ts, or empty)"),
-  Options.withDefault(".js")
+const extFlag = Flag.string("ext").pipe(
+  Flag.withAlias("e"),
+  Flag.withDescription("Import extension for generated files (.js, .ts, or empty)"),
+  Flag.withDefault(".js")
 )
 
 const syncCommand = Command.make(
   "sync",
-  { specInput, name: nameOption, outdir: outdirOption, ext: extOption },
-  ({ specInput, name, outdir, ext }) =>
+  { spec: specFlag, url: urlFlag, name: nameFlag, outdir: outdirFlag, ext: extFlag },
+  ({ spec: specOpt, url: urlOpt, name, outdir, ext }) =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
       const api = yield* OpenApi
 
-      const spec = yield* Either.match(specInput, {
-        onLeft: (parsed) => Effect.succeed(parsed),
-        onRight: (url) => fetchSpec(url as string)
-      })
+      if (Option.isSome(specOpt) && Option.isSome(urlOpt)) {
+        return yield* Effect.fail("Cannot provide both --spec and --url" as const)
+      }
+      if (Option.isNone(specOpt) && Option.isNone(urlOpt)) {
+        return yield* Effect.fail("Must provide either --spec or --url" as const)
+      }
+
+      const spec = Option.isSome(specOpt)
+        ? specOpt.value
+        : yield* fetchSpec(Option.getOrThrow(urlOpt))
 
       const result = yield* api.generate(spec as any, { name, ext })
 
@@ -102,18 +103,14 @@ export const openapigen = Command.make("openapigen").pipe(
   Command.withSubcommands([syncCommand])
 )
 
-export const run = Command.run(openapigen, {
-  name: "openapigen",
+export const run = Command.runWith(openapigen, {
   version: "0.0.0"
 })
 
 const Env = Layer.mergeAll(
-  NodeContext.layer,
-  NodeHttpClient.layer,
-  OpenApi.Live,
-  CliConfig.layer({
-    showBuiltIns: false
-  })
+  NodeServices.layer,
+  NodeHttpClient.layerUndici,
+  OpenApi.Live
 )
 
-run(process.argv).pipe(Effect.provide(Env), NodeRuntime.runMain)
+run(process.argv.slice(2)).pipe(Effect.provide(Env), NodeRuntime.runMain)

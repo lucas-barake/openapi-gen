@@ -1,15 +1,15 @@
-import type { OpenAPISpec, OpenAPISpecMethodName, OpenAPISpecPathItem } from "@effect/platform/OpenApi"
-import type * as JsonSchema from "@effect/platform/OpenApiJsonSchema"
-import * as Context from "effect/Context"
 import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import * as Option from "effect/Option"
+import * as ServiceMap from "effect/ServiceMap"
 import type { DeepMutable } from "effect/Types"
+import type { OpenApi as OpenApiTypes } from "effect/unstable/httpapi"
+import type * as JsonSchema from "./OpenApiJsonSchema.js"
 import { convertObj } from "swagger2openapi"
 import * as JsonSchemaGen from "./JsonSchemaGen.js"
 import { camelize, identifier, nonEmptyString, toComment } from "./Utils.js"
 
-const methodNames: ReadonlyArray<OpenAPISpecMethodName> = [
+const methodNames: ReadonlyArray<OpenApiTypes.OpenAPISpecMethodName> = [
   "get",
   "put",
   "post",
@@ -20,11 +20,11 @@ const methodNames: ReadonlyArray<OpenAPISpecMethodName> = [
   "trace"
 ]
 
-const httpClientMethodNames: Record<OpenAPISpecMethodName, string> = {
+const httpClientMethodNames: Record<OpenApiTypes.OpenAPISpecMethodName, string> = {
   get: "get",
   put: "put",
   post: "post",
-  delete: "del",
+  delete: "delete",
   options: "options",
   head: "head",
   patch: "patch",
@@ -33,7 +33,7 @@ const httpClientMethodNames: Record<OpenAPISpecMethodName, string> = {
 
 interface ParsedOperation {
   readonly id: string
-  readonly method: OpenAPISpecMethodName
+  readonly method: OpenApiTypes.OpenAPISpecMethodName
   readonly description: Option.Option<string>
   readonly tags: ReadonlyArray<string>
   readonly params?: string
@@ -41,6 +41,7 @@ interface ParsedOperation {
   readonly urlParams: ReadonlyArray<string>
   readonly headers: ReadonlyArray<string>
   readonly payload?: string
+  readonly payloadIsClass: boolean
   readonly payloadFormData: boolean
   readonly pathIds: ReadonlyArray<string>
   readonly pathTemplate: string
@@ -65,8 +66,8 @@ export interface TagModule {
 export const make = Effect.gen(function*() {
   const isV2 = (spec: object) => "swagger" in spec
 
-  const convert = Effect.fn("OpenApi.convert")((v2Spec: unknown) =>
-    Effect.async<OpenAPISpec>((resume) => {
+  const convert = Effect.fn("OpenApi.convert")(function*(v2Spec: unknown) {
+    return yield* Effect.callback<OpenApiTypes.OpenAPISpec>((resume) => {
       convertObj(
         v2Spec as any,
         { laxDefaults: true, laxurls: true, patch: true, warnOnly: true },
@@ -79,11 +80,11 @@ export const make = Effect.gen(function*() {
         }
       )
     })
-  )
+  })
 
   const generate = Effect.fnUntraced(
     function*(
-      spec: OpenAPISpec,
+      spec: OpenApiTypes.OpenAPISpec,
       options: {
         readonly name: string
         readonly ext?: string
@@ -108,7 +109,7 @@ export const make = Effect.gen(function*() {
         return current
       }
 
-      const handlePath = (path: string, methods: OpenAPISpecPathItem) =>
+      const handlePath = (path: string, methods: OpenApiTypes.OpenAPISpecPathItem) =>
         methodNames
           .filter((method) => !!methods[method])
           .forEach((method) => {
@@ -132,6 +133,7 @@ export const make = Effect.gen(function*() {
               pathTemplate,
               urlParams: [],
               headers: [],
+              payloadIsClass: false,
               payloadFormData: false,
               successSchemas: new Map(),
               errorSchemas: new Map(),
@@ -157,11 +159,11 @@ export const make = Effect.gen(function*() {
                 if (parameter.in === "path" || parameter.in === "cookie") {
                   return
                 }
-                const paramSchema = parameter.schema
+                const paramSchema = parameter.schema as JsonSchema.JsonSchema
                 const added: Array<string> = []
                 if ("properties" in paramSchema) {
                   const required = paramSchema.required ?? []
-                  Object.entries(paramSchema.properties).forEach(
+                  Object.entries(paramSchema.properties as Record<string, JsonSchema.JsonSchema>).forEach(
                     ([name, propSchema]) => {
                       const adjustedName = `${parameter.name}[${name}]`
                       schema.properties[adjustedName] = propSchema
@@ -172,7 +174,7 @@ export const make = Effect.gen(function*() {
                     }
                   )
                 } else {
-                  schema.properties[parameter.name] = parameter.schema
+                  schema.properties[parameter.name] = parameter.schema as JsonSchema.JsonSchema
                   if (parameter.required) {
                     schema.required.push(parameter.name)
                   }
@@ -188,18 +190,19 @@ export const make = Effect.gen(function*() {
                 op.params = gen.addSchema(
                   `${schemaId}Params`,
                   schema,
-                  context,
-                  true
+                  context
                 )
                 op.paramsOptional = !schema.required || schema.required.length === 0
               }
             }
             if (operation.requestBody?.content?.["application/json"]?.schema) {
+              const bodySchema = operation.requestBody.content["application/json"].schema
               op.payload = gen.addSchema(
                 `${schemaId}Request`,
-                operation.requestBody.content["application/json"].schema,
+                bodySchema,
                 context
               )
+              op.payloadIsClass = "$ref" in bodySchema
             } else if (
               operation.requestBody?.content?.["multipart/form-data"]
             ) {
@@ -220,8 +223,7 @@ export const make = Effect.gen(function*() {
                   const schemaName = gen.addSchema(
                     `${schemaId}${status}`,
                     response.content["application/json"].schema,
-                    context,
-                    true
+                    context
                   )
                   if (status === "default") {
                     defaultSchema = schemaName
@@ -260,8 +262,7 @@ export const make = Effect.gen(function*() {
                   op.streamSchema = gen.addSchema(
                     `${schemaId}StreamEvent`,
                     eventStreamContent.schema,
-                    context,
-                    true
+                    context
                   )
                 }
                 if (!response.content) {
@@ -367,7 +368,7 @@ export const make = Effect.gen(function*() {
 
         const hasStreaming = ops.some((op) => !!op.streamSchema)
         const streamingImports = hasStreaming
-          ? `import * as Sse from "@effect/experimental/Sse"\nimport * as Stream from "effect/Stream"`
+          ? `import * as Sse from "effect/unstable/encoding/Sse"\nimport * as Stream from "effect/Stream"`
           : ""
 
         const parts = [transformer.imports]
@@ -393,14 +394,14 @@ export const make = Effect.gen(function*() {
   return { generate } as const
 })
 
-export class OpenApi extends Effect.Tag("OpenApi")<
+export class OpenApi extends ServiceMap.Service<
   OpenApi,
-  Effect.Effect.Success<typeof make>
->() {
-  static Live = Layer.effect(OpenApi, make)
+  Effect.Success<typeof make>
+>()("OpenApi") {
+  static Live = Layer.effect(OpenApi)(make)
 }
 
-export class OpenApiTransformer extends Context.Tag("OpenApiTransformer")<
+export class OpenApiTransformer extends ServiceMap.Service<
   OpenApiTransformer,
   {
     readonly imports: string
@@ -413,9 +414,9 @@ export class OpenApiTransformer extends Context.Tag("OpenApiTransformer")<
       operations: ReadonlyArray<ParsedOperation>
     ) => string
   }
->() {}
+>()("OpenApiTransformer") {}
 
-export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
+export const layerTransformerSchema = Layer.sync(OpenApiTransformer)(() => {
   const operationsToInterface = (
     name: string,
     operations: ReadonlyArray<ParsedOperation>
@@ -458,7 +459,7 @@ export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
         .map((schema) => `typeof ${schema}.Type`)
         .join(" | ")
     }
-    const errors = ["HttpClientError.HttpClientError", "ParseError"]
+    const errors = ["HttpClientError.HttpClientError", "Schema.SchemaError"]
     if (operation.payload) errors.push("HttpBody.HttpBodyError")
     if (operation.errorSchemas.size > 0) {
       errors.push(
@@ -472,7 +473,7 @@ export const layerTransformerSchema = Layer.sync(OpenApiTransformer, () => {
 
   const operationToStreamMethod = (operation: ParsedOperation) => {
     const args = buildOptionsArgs(operation)
-    const errors = ["HttpClientError.HttpClientError", "ParseError"]
+    const errors = ["HttpClientError.HttpClientError", "Schema.SchemaError"]
     if (operation.payload) errors.push("HttpBody.HttpBodyError")
     if (operation.errorSchemas.size > 0) {
       errors.push(...Array.from(operation.errorSchemas.values()))
@@ -550,7 +551,10 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
       if (operation.payloadFormData) {
         requestPipeline.push(`HttpClientRequest.bodyFormDataRecord(options.payload as any)`)
       } else {
-        requestPipeline.push(`HttpClientRequest.schemaBodyJson(${operation.payload})(options.payload)`)
+        const payloadSchema = operation.payloadIsClass
+          ? `Schema.Struct(${operation.payload}.fields)`
+          : operation.payload
+        requestPipeline.push(`HttpClientRequest.schemaBodyJson(${payloadSchema})(options.payload)`)
         return (
           `"${operation.id}": (${args.join(", ")}) =>\n    ` +
           `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate}).pipe(\n      ` +
@@ -587,17 +591,20 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
     requestPipeline.push(`HttpClientRequest.setHeaders(options?.headers ?? {})`)
 
     if (operation.payload && !operation.payloadFormData) {
-      requestPipeline.push(`HttpClientRequest.schemaBodyJson(${operation.payload})(options.payload)`)
+      const payloadSchema = operation.payloadIsClass
+        ? `Schema.Struct(${operation.payload}.fields)`
+        : operation.payload
+      requestPipeline.push(`HttpClientRequest.schemaBodyJson(${payloadSchema})(options.payload)`)
       return (
         `"${operation.id}Stream": (${args.join(", ")}) =>\n    ` +
         `HttpClientRequest.${httpClientMethodNames[operation.method]}(${operation.pathTemplate}).pipe(\n      ` +
         `${requestPipeline.join(",\n      ")},\n      ` +
         `Effect.flatMap((request) => httpClient.execute(request)),\n      ` +
         `Effect.map((response) => response.stream),\n      ` +
-        `Stream.unwrapScoped,\n      ` +
+        `Stream.unwrap,\n      ` +
         `Stream.decodeText(),\n      ` +
-        `Stream.pipeThroughChannel(Sse.makeChannel()),\n      ` +
-        `Stream.mapEffect((event) => Schema.decode(Schema.parseJson(${operation.streamSchema}))(event.data)),\n    )`
+        `Stream.pipeThroughChannel(Sse.decodeDataSchema(${operation.streamSchema})),\n      ` +
+        `Stream.map((event) => event.data),\n    )`
       )
     }
     return (
@@ -607,23 +614,17 @@ export const make = (httpClient: HttpClient.HttpClient): ${name} => ({
       `${requestPipeline.join(",\n        ")},\n      ` +
       `)\n    ).pipe(\n      ` +
       `Effect.map((response) => response.stream),\n      ` +
-      `Stream.unwrapScoped,\n      ` +
+      `Stream.unwrap,\n      ` +
       `Stream.decodeText(),\n      ` +
-      `Stream.pipeThroughChannel(Sse.makeChannel()),\n      ` +
-      `Stream.mapEffect((event) => Schema.decode(Schema.parseJson(${operation.streamSchema}))(event.data)),\n    )`
+      `Stream.pipeThroughChannel(Sse.decodeDataSchema(${operation.streamSchema})),\n      ` +
+      `Stream.map((event) => event.data),\n    )`
     )
   }
 
   return OpenApiTransformer.of({
     imports: [
-      "import type * as HttpClient from \"@effect/platform/HttpClient\"",
-      "import * as HttpClientError from \"@effect/platform/HttpClientError\"",
-      "import type * as HttpBody from \"@effect/platform/HttpBody\"",
-      "import type * as Headers from \"@effect/platform/Headers\"",
-      "import * as HttpClientRequest from \"@effect/platform/HttpClientRequest\"",
-      "import * as HttpClientResponse from \"@effect/platform/HttpClientResponse\"",
+      "import { type HttpClient, HttpClientError, type HttpBody, type Headers, HttpClientRequest, HttpClientResponse } from \"effect/unstable/http\"",
       "import * as Effect from \"effect/Effect\"",
-      "import type { ParseError } from \"effect/ParseResult\"",
       "import * as Schema from \"effect/Schema\""
     ].join("\n"),
     toTypes: operationsToInterface,
@@ -646,11 +647,12 @@ const unexpectedStatusSource = `const unexpectedStatus = (response: HttpClientRe
     Effect.orElseSucceed(response.json, () => "Unexpected status code"),
     (description) =>
       Effect.fail(
-        new HttpClientError.ResponseError({
-          request: response.request,
-          response,
-          reason: "StatusCode",
-          description: typeof description === "string" ? description : JSON.stringify(description),
+        new HttpClientError.HttpClientError({
+          reason: new HttpClientError.StatusCodeError({
+            request: response.request,
+            response,
+            description: typeof description === "string" ? description : JSON.stringify(description),
+          }),
         }),
       ),
   )`

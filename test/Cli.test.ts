@@ -1,8 +1,7 @@
-import * as NodeContext from "@effect/platform-node/NodeContext"
-import * as FileSystem from "@effect/platform/FileSystem"
-import * as HttpClient from "@effect/platform/HttpClient"
-import * as HttpClientResponse from "@effect/platform/HttpClientResponse"
-import * as Path from "@effect/platform/Path"
+import { NodeServices } from "@effect/platform-node"
+import * as FileSystem from "effect/FileSystem"
+import { HttpClient, HttpClientResponse } from "effect/unstable/http"
+import * as Path from "effect/Path"
 import { describe, expect, it } from "@effect/vitest"
 import * as Effect from "effect/Effect"
 import * as Exit from "effect/Exit"
@@ -101,9 +100,8 @@ const petStoreSpec = {
   }
 }
 
-const MockHttpClient = Layer.succeed(
-  HttpClient.HttpClient,
-  HttpClient.make((request) =>
+const MockHttpClient = Layer.succeed(HttpClient.HttpClient)(
+  HttpClient.make((request: any) =>
     Effect.succeed(
       HttpClientResponse.fromWeb(
         request,
@@ -117,13 +115,13 @@ const MockHttpClient = Layer.succeed(
 )
 
 const TestEnv = Layer.mergeAll(
-  NodeContext.layer,
+  NodeServices.layer,
   OpenApi.Live,
   MockHttpClient
 )
 
 describe("CLI integration", () => {
-  it.scoped("sync generates per-tag files and barrel index", () =>
+  it.effect("sync generates per-tag files and barrel index", () =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
@@ -135,8 +133,6 @@ describe("CLI integration", () => {
       yield* fs.writeFileString(specPath, JSON.stringify(petStoreSpec))
 
       yield* run([
-        "node",
-        "openapigen.js",
         "sync",
         "--spec",
         specPath,
@@ -163,14 +159,14 @@ describe("CLI integration", () => {
       expect(petsSource).toContain("HttpClientRequest.get(`/pets`)")
       expect(petsSource).toContain("HttpClientRequest.post(`/pets`)")
       expect(petsSource).toContain("const CreatePet400Body = Schema.Struct(")
-      expect(petsSource).toContain("Schema.TaggedError<CreatePet400>")
+      expect(petsSource).toContain("Schema.TaggedErrorClass<CreatePet400>")
 
       const usersSource = yield* fs.readFileString(path.join(outDir, "users.ts"))
       expect(usersSource).toContain("listUsers")
       expect(usersSource).not.toContain("listPets")
     }).pipe(Effect.provide(TestEnv)))
 
-  it.scoped("sync with --ext .ts uses .ts extensions in imports", () =>
+  it.effect("sync with --ext .ts uses .ts extensions in imports", () =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
@@ -182,8 +178,6 @@ describe("CLI integration", () => {
       yield* fs.writeFileString(specPath, JSON.stringify(petStoreSpec))
 
       yield* run([
-        "node",
-        "openapigen.js",
         "sync",
         "--spec",
         specPath,
@@ -201,7 +195,7 @@ describe("CLI integration", () => {
       expect(barrel).not.toContain(".js\"")
     }).pipe(Effect.provide(TestEnv)))
 
-  it.scoped("sync always overwrites existing files", () =>
+  it.effect("sync always overwrites existing files", () =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
@@ -212,18 +206,18 @@ describe("CLI integration", () => {
 
       yield* fs.writeFileString(specPath, JSON.stringify(petStoreSpec))
 
-      yield* run(["node", "openapigen.js", "sync", "--spec", specPath, "--outdir", outDir])
+      yield* run(["sync", "--spec", specPath, "--outdir", outDir])
 
       const firstContent = yield* fs.readFileString(path.join(outDir, "pets.ts"))
 
-      yield* run(["node", "openapigen.js", "sync", "--spec", specPath, "--outdir", outDir, "--name", "DifferentName"])
+      yield* run(["sync", "--spec", specPath, "--outdir", outDir, "--name", "DifferentName"])
 
       const secondContent = yield* fs.readFileString(path.join(outDir, "pets.ts"))
       expect(secondContent).toContain("DifferentName")
       expect(secondContent).not.toEqual(firstContent)
     }).pipe(Effect.provide(TestEnv)))
 
-  it.scoped("sync with shared schema creates _common.ts", () =>
+  it.effect("sync with shared schema creates _common.ts", () =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
@@ -278,7 +272,7 @@ describe("CLI integration", () => {
 
       yield* fs.writeFileString(specPath, JSON.stringify(specWithShared))
 
-      yield* run(["node", "openapigen.js", "sync", "--spec", specPath, "--outdir", outDir])
+      yield* run(["sync", "--spec", specPath, "--outdir", outDir])
 
       const files = yield* fs.readDirectory(outDir)
       expect(files).toContain("_common.ts")
@@ -291,7 +285,7 @@ describe("CLI integration", () => {
       expect(tagA).toContain("export { Shared }")
     }).pipe(Effect.provide(TestEnv)))
 
-  it.scoped("sync with --url fetches and generates from remote spec", () =>
+  it.effect("sync with --url fetches and generates from remote spec", () =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
@@ -300,8 +294,6 @@ describe("CLI integration", () => {
       const outDir = path.join(tmpDir, "generated")
 
       yield* run([
-        "node",
-        "openapigen.js",
         "sync",
         "--url",
         "http://test.local/spec.json",
@@ -322,7 +314,7 @@ describe("CLI integration", () => {
       expect(petsSource).toContain("export interface PetStore")
     }).pipe(Effect.provide(TestEnv)))
 
-  it.scoped("sync fails when both --spec and --url are provided", () =>
+  it.effect("sync fails when both --spec and --url are provided", () =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
@@ -334,8 +326,6 @@ describe("CLI integration", () => {
       yield* fs.writeFileString(specPath, JSON.stringify(petStoreSpec))
 
       const exit = yield* run([
-        "node",
-        "openapigen.js",
         "sync",
         "--spec",
         specPath,
@@ -348,7 +338,7 @@ describe("CLI integration", () => {
       expect(Exit.isFailure(exit)).toBe(true)
     }).pipe(Effect.provide(TestEnv)))
 
-  it.scoped("sync fails when neither --spec nor --url is provided", () =>
+  it.effect("sync fails when neither --spec nor --url is provided", () =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const path = yield* Path.Path
@@ -357,8 +347,6 @@ describe("CLI integration", () => {
       const outDir = path.join(tmpDir, "generated")
 
       const exit = yield* run([
-        "node",
-        "openapigen.js",
         "sync",
         "--outdir",
         outDir
