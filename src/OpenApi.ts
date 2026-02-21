@@ -4,9 +4,9 @@ import * as Option from "effect/Option"
 import * as ServiceMap from "effect/ServiceMap"
 import type { DeepMutable } from "effect/Types"
 import type { OpenApi as OpenApiTypes } from "effect/unstable/httpapi"
-import type * as JsonSchema from "./OpenApiJsonSchema.js"
 import { convertObj } from "swagger2openapi"
 import * as JsonSchemaGen from "./JsonSchemaGen.js"
+import type * as JsonSchema from "./OpenApiJsonSchema.js"
 import { camelize, identifier, nonEmptyString, toComment } from "./Utils.js"
 
 const methodNames: ReadonlyArray<OpenApiTypes.OpenAPISpecMethodName> = [

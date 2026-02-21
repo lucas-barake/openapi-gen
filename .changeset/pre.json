@@ -1,0 +1,8 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@lucas-barake/openapi-gen": "0.4.4"
+  },
+  "changesets": []
+}

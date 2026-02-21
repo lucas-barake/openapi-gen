@@ -1,7 +1,7 @@
-import type * as JsonSchema from "../src/OpenApiJsonSchema.js"
 import { describe, expect, it } from "@effect/vitest"
 import * as Effect from "effect/Effect"
 import * as JsonSchemaGen from "../src/JsonSchemaGen.js"
+import type * as JsonSchema from "../src/OpenApiJsonSchema.js"
 
 const runSchema = (
   name: string,
@@ -31,7 +31,8 @@ describe("JsonSchemaGen — Schema mode", () => {
               age: { type: "number" },
               active: { type: "boolean" }
             }
-          } as JsonSchema.JsonSchema        )
+          } as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.Struct(")
         expect(output).toContain("\"name\": Schema.String")
         expect(output).toContain("\"age\": Schema.Number")
@@ -78,7 +79,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               label: { type: "string" }
             }
-          } as JsonSchema.JsonSchema        )
+          } as JsonSchema.JsonSchema
+        )
         expect(output).toContain(
           "Schema.optionalKey(Schema.NullOr(Schema.String))"
         )
@@ -97,7 +99,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               label: { type: "string", nullable: true }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.NullOr(Schema.String)")
       })
   )
@@ -114,7 +117,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               items: { type: "array", items: { type: "string" } }
             }
-          } as JsonSchema.JsonSchema        )
+          } as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.Array(Schema.String)")
       })
   )
@@ -135,7 +139,8 @@ describe("JsonSchemaGen — Schema mode", () => {
                 minItems: 1
               }
             }
-          } as JsonSchema.JsonSchema        )
+          } as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.NonEmptyArray(Schema.String)")
       })
   )
@@ -196,7 +201,8 @@ describe("JsonSchemaGen — Schema mode", () => {
                 pattern: "^[A-Z]+$"
               }
             }
-          } as JsonSchema.JsonSchema        )
+          } as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.String.pipe(")
         expect(output).toContain("Schema.check(Schema.isMinLength(3))")
         expect(output).toContain("Schema.check(Schema.isMaxLength(10))")
@@ -220,7 +226,8 @@ describe("JsonSchemaGen — Schema mode", () => {
                 maximum: 100
               }
             }
-          } as JsonSchema.JsonSchema        )
+          } as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.Number.pipe(")
         expect(output).toContain("Schema.check(Schema.isGreaterThanOrEqualTo(0))")
         expect(output).toContain("Schema.check(Schema.isLessThanOrEqualTo(100))")
@@ -265,7 +272,8 @@ describe("JsonSchemaGen — Schema mode", () => {
                 ]
               }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).toContain("\"a\": Schema.String")
         expect(output).toContain("\"b\": Schema.Number")
       })
@@ -283,7 +291,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               value: { type: ["string", "null"] }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.NullOr(Schema.String)")
       })
   )
@@ -300,7 +309,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               label: { type: "string", nullable: true, default: null }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).toContain(
           "Schema.NullOr(Schema.String).pipe(Schema.withDecodingDefault(() => null))"
         )
@@ -319,7 +329,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               label: { type: "string", default: "foo" }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.withDecodingDefault")
         expect(output).toContain("\"foo\"")
       })
@@ -372,7 +383,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               file: { type: "string", format: "binary" }
             }
-          } as JsonSchema.JsonSchema        )
+          } as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.instanceOf(globalThis.Blob)")
       })
   )
@@ -389,7 +401,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               count: { type: "integer" }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.Int")
       })
   )
@@ -408,7 +421,8 @@ describe("JsonSchemaGen — Schema mode", () => {
                 anyOf: [{ type: "string" }, { type: "null" }]
               }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.NullOr(Schema.String)")
       })
   )
@@ -425,7 +439,8 @@ describe("JsonSchemaGen — Schema mode", () => {
             properties: {
               data: { $ref: "https://example.com/schema.json" }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).not.toContain("data")
       })
   )
@@ -446,7 +461,8 @@ describe("JsonSchemaGen — Schema mode", () => {
                 exclusiveMaximum: 100
               }
             }
-          } as unknown as JsonSchema.JsonSchema        )
+          } as unknown as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.check(Schema.isGreaterThan(0))")
         expect(output).toContain("Schema.check(Schema.isLessThan(100))")
       })
@@ -468,7 +484,8 @@ describe("JsonSchemaGen — Schema mode", () => {
                 maxItems: 5
               }
             }
-          } as JsonSchema.JsonSchema        )
+          } as JsonSchema.JsonSchema
+        )
         expect(output).toContain("Schema.Array(Schema.String)")
         expect(output).toContain("Schema.check(Schema.isMaxLength(5))")
       })
@@ -492,7 +509,8 @@ describe("JsonSchemaGen — boolean schemas (OpenAPI 3.1)", () => {
                 items: false
               }
             }
-          } as any        )
+          } as any
+        )
         expect(output).toContain("Schema.Tuple([Schema.Number, Schema.Number])")
       })
   )
@@ -509,7 +527,8 @@ describe("JsonSchemaGen — boolean schemas (OpenAPI 3.1)", () => {
             properties: {
               items: { type: "array", items: true }
             }
-          } as any        )
+          } as any
+        )
         expect(output).toContain("Schema.Array(Schema.Json)")
       })
   )
@@ -530,7 +549,8 @@ describe("JsonSchemaGen — boolean schemas (OpenAPI 3.1)", () => {
                 items: { type: "number" }
               }
             }
-          } as any        )
+          } as any
+        )
         expect(output).toContain("Schema.TupleWithRest(Schema.Tuple([Schema.String]), [Schema.Number])")
       })
   )
@@ -597,7 +617,8 @@ describe("JsonSchemaGen — boolean schemas (OpenAPI 3.1)", () => {
                 items: false
               }
             }
-          } as any        )
+          } as any
+        )
         expect(output).toContain("Schema.Tuple([Schema.Number, Schema.Number, Schema.Number])")
       })
   )
@@ -679,7 +700,9 @@ describe("JsonSchemaGen — branded IDs", () => {
             }
           } as JsonSchema.JsonSchema
         )
-        expect(output).toContain("Schema.String.pipe(Schema.check(Schema.isUUID(undefined))).pipe(Schema.brand(\"EntityId\"))")
+        expect(output).toContain(
+          "Schema.String.pipe(Schema.check(Schema.isUUID(undefined))).pipe(Schema.brand(\"EntityId\"))"
+        )
       })
   )
 

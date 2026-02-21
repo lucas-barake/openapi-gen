@@ -1,8 +1,8 @@
-import * as Sse from "effect/unstable/encoding/Sse"
-import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import * as Effect from "effect/Effect"
 import * as Schema from "effect/Schema"
 import * as Stream from "effect/Stream"
+import * as Sse from "effect/unstable/encoding/Sse"
+import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { transformSync } from "esbuild"
 import type { GenerateResult } from "../../src/OpenApi.js"
 

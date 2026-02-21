@@ -1,6 +1,6 @@
 import { NodeFileSystem } from "@effect/platform-node"
-import * as FileSystem from "effect/FileSystem"
 import { Effect } from "effect"
+import * as FileSystem from "effect/FileSystem"
 import * as path from "node:path"
 
 const pathTo = path.join("dist", "package.json")

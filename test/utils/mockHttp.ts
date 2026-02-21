@@ -1,5 +1,5 @@
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import * as Effect from "effect/Effect"
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 
 const makeResponse = (
   request: HttpClientRequest.HttpClientRequest,
