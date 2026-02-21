@@ -1,5 +1,20 @@
 # @lucas-barake/openapi-gen
 
+## 1.0.0-beta.0
+
+### Major Changes
+
+- [`e6418cc`](https://github.com/lucas-barake/openapi-gen/commit/e6418ccc1529fb9e195fb2b27d70b75a9205afd2) Thanks [@lucas-barake](https://github.com/lucas-barake)! - Migrate to Effect v4
+
+  - Update all Effect dependencies to v4 beta
+  - Generated code now uses `effect/unstable/http` and `effect/unstable/encoding/Sse` import paths
+  - Generated schemas use `Schema.Json` instead of `Schema.Unknown` for untyped values (JSON-safe under `toCodecJson`)
+  - Generated `$ref` request body encoding uses `Schema.Struct(Class.fields)` to accept plain objects
+  - SSE streaming uses `Sse.decodeDataSchema` pipeline and `Stream.unwrap`
+  - `HttpClientRequest.del` renamed to `HttpClientRequest.delete`
+  - Error types use `Schema.SchemaError` instead of `ParseError`
+  - CLI flags restructured to use separate optional flags
+
 ## 0.4.4
 
 ### Patch Changes
