@@ -4,5 +4,7 @@
   "initialVersions": {
     "@lucas-barake/openapi-gen": "0.4.4"
   },
-  "changesets": []
+  "changesets": [
+    "effect-v4-migration"
+  ]
 }
