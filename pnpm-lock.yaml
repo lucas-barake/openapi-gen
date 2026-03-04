@@ -22,11 +22,11 @@ importers:
         specifier: ^2.29.4
         version: 2.29.4
       '@effect/platform-node':
-        specifier: ^4.0.0-beta.8
-        version: 4.0.0-beta.8(effect@4.0.0-beta.8)(ioredis@5.9.3)
+        specifier: 4.0.0-beta.27
+        version: 4.0.0-beta.27(effect@4.0.0-beta.27)(ioredis@5.9.3)
       '@effect/vitest':
-        specifier: ^4.0.0-beta.8
-        version: 4.0.0-beta.8(effect@4.0.0-beta.8)(vitest@3.2.4(@types/node@22.15.18)(tsx@4.19.4)(yaml@2.8.0))
+        specifier: 4.0.0-beta.27
+        version: 4.0.0-beta.27(effect@4.0.0-beta.27)(vitest@3.2.4(@types/node@22.15.18)(tsx@4.19.4)(yaml@2.8.0))
       '@types/node':
         specifier: ^22.15.18
         version: 22.15.18
@@ -43,8 +43,8 @@ importers:
         specifier: ^0.51.1
         version: 0.51.1
       effect:
-        specifier: ^4.0.0-beta.8
-        version: 4.0.0-beta.8
+        specifier: 4.0.0-beta.27
+        version: 4.0.0-beta.27
       esbuild:
         specifier: ^0.27.3
         version: 0.27.3
@@ -212,24 +212,24 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@effect/platform-node-shared@4.0.0-beta.8':
-    resolution: {integrity: sha512-OK5E2FURY244KxIG2itHIvV58GvJvR+jiSXt/DiG9m4SmsVUXCVaLmKpYQWo0e27U3s73+0s3gX+1PEzBBVVbA==}
+  '@effect/platform-node-shared@4.0.0-beta.27':
+    resolution: {integrity: sha512-prRa5MIWGAvq2g6FgVP5RFfPwI+DvcXCaEZetvPMK70wdkTR1+jKQqJ9QDKWNIP+2d4llE/cF21SvcpBJWq0gw==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-beta.8
+      effect: ^4.0.0-beta.27
 
-  '@effect/platform-node@4.0.0-beta.8':
-    resolution: {integrity: sha512-nnyUQQoZVkSP4ZQxMtNPKj/Ia5XqpUVIfCmCojnRuPo/COqJhA/EjP44UfYJZaL0Q5tDILDAE46NGO+kWuaU6g==}
+  '@effect/platform-node@4.0.0-beta.27':
+    resolution: {integrity: sha512-UPZMtFVnDIM5nb6A2pEPo229VnfgMdvl/9sGiQaYRB9qEVHerk0elxcoWOb2szoivBYePYFOsPKIWpR6jCldtQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-beta.8
+      effect: ^4.0.0-beta.27
       ioredis: ^5.7.0
 
-  '@effect/vitest@4.0.0-beta.8':
-    resolution: {integrity: sha512-CnwGyFhEOaGWhEfTLtUSC8Yq1losYk+V6Aepc18um8NkOHnbr5fLClE+XqNFPO1DN6Ehs6Kv/ms3Di2kw9/9Kg==}
+  '@effect/vitest@4.0.0-beta.27':
+    resolution: {integrity: sha512-l9LIQK2yqOF3h47CmlT2VfYWtfHLd+ZuMzma+w0OjxmPsR6bzYMA33ft4gljJ/lEQnXvGHxiTpnZySALCfv+pA==}
     peerDependencies:
-      effect: ^4.0.0-beta.8
-      vitest: ^3.0.0
+      effect: ^4.0.0-beta.27
+      vitest: ^3.0.0 || ^4.0.0
 
   '@esbuild/aix-ppc64@0.25.4':
     resolution: {integrity: sha512-1VCICWypeQKhVbE9oW/sJaAmjLxhVqacdkvPLEjwlttjfwENRSClS8EjBz0KzRyFSCPDIkuXW34Je/vk7zdB7Q==}
@@ -1134,8 +1134,8 @@ packages:
     resolution: {integrity: sha512-reYkTUJAZb9gUuZ2RvVCNhVHdg62RHnJ7WJl8ftMi4diZ6NWlciOzQN88pUhSELEwflJht4oQDv0F0BMlwaYtA==}
     engines: {node: '>=8'}
 
-  detect-libc@2.0.4:
-    resolution: {integrity: sha512-3UDv+G9CsCKO1WKMGw9fwq/SWJYbI0c5Y7LU1AXYoDdbhE2AHQ6N6Nb34sG8Fj7T5APy8qXDCKuuIHd1BR0tVA==}
+  detect-libc@2.1.2:
+    resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
   dir-glob@3.0.1:
@@ -1153,8 +1153,8 @@ packages:
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
 
-  effect@4.0.0-beta.8:
-    resolution: {integrity: sha512-8Df3vdVY8ahZcn2oC27lAfMGXHId1I5YDHqGgLe4UCQ9D8Kzmb5oq+qZVXvmY9fZANabnu47AE41040kc52QCg==}
+  effect@4.0.0-beta.27:
+    resolution: {integrity: sha512-bNQEF3vaVGF8jAJ+HW1A4DaxVNmujgEu89sO+VNW1AvUYtPGMtKPTBU15K9inu1rG+hkxNFFRlVvLAJsdaE2mg==}
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -1891,8 +1891,8 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  undici@7.21.0:
-    resolution: {integrity: sha512-Hn2tCQpoDt1wv23a68Ctc8Cr/BHpUSfaPYrkajTXOS9IKpxVRx/X5m1K2YkbK2ipgZgxXSgsUinl3x+2YdSSfg==}
+  undici@7.22.0:
+    resolution: {integrity: sha512-RqslV2Us5BrllB+JeiZnK4peryVTndy9Dnqq62S3yYRRTj0tFQCwEniUy2167skdGOy3vqRzEvl1Dm4sV2ReDg==}
     engines: {node: '>=20.18.1'}
 
   universalify@0.1.2:
@@ -2258,29 +2258,29 @@ snapshots:
   '@dprint/win32-x64@0.51.1':
     optional: true
 
-  '@effect/platform-node-shared@4.0.0-beta.8(effect@4.0.0-beta.8)':
+  '@effect/platform-node-shared@4.0.0-beta.27(effect@4.0.0-beta.27)':
     dependencies:
       '@types/ws': 8.18.1
-      effect: 4.0.0-beta.8
+      effect: 4.0.0-beta.27
       ws: 8.19.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node@4.0.0-beta.8(effect@4.0.0-beta.8)(ioredis@5.9.3)':
+  '@effect/platform-node@4.0.0-beta.27(effect@4.0.0-beta.27)(ioredis@5.9.3)':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-beta.8(effect@4.0.0-beta.8)
-      effect: 4.0.0-beta.8
+      '@effect/platform-node-shared': 4.0.0-beta.27(effect@4.0.0-beta.27)
+      effect: 4.0.0-beta.27
       ioredis: 5.9.3
       mime: 4.1.0
-      undici: 7.21.0
+      undici: 7.22.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/vitest@4.0.0-beta.8(effect@4.0.0-beta.8)(vitest@3.2.4(@types/node@22.15.18)(tsx@4.19.4)(yaml@2.8.0))':
+  '@effect/vitest@4.0.0-beta.27(effect@4.0.0-beta.27)(vitest@3.2.4(@types/node@22.15.18)(tsx@4.19.4)(yaml@2.8.0))':
     dependencies:
-      effect: 4.0.0-beta.8
+      effect: 4.0.0-beta.27
       vitest: 3.2.4(@types/node@22.15.18)(tsx@4.19.4)(yaml@2.8.0)
 
   '@esbuild/aix-ppc64@0.25.4':
@@ -2909,7 +2909,7 @@ snapshots:
 
   detect-indent@6.1.0: {}
 
-  detect-libc@2.0.4:
+  detect-libc@2.1.2:
     optional: true
 
   dir-glob@3.0.1:
@@ -2934,7 +2934,7 @@ snapshots:
 
   eastasianwidth@0.2.0: {}
 
-  effect@4.0.0-beta.8:
+  effect@4.0.0-beta.27:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 4.5.3
@@ -3305,7 +3305,7 @@ snapshots:
 
   node-gyp-build-optional-packages@5.2.2:
     dependencies:
-      detect-libc: 2.0.4
+      detect-libc: 2.1.2
     optional: true
 
   node-readfiles@0.2.0:
@@ -3731,7 +3731,7 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici@7.21.0: {}
+  undici@7.22.0: {}
 
   universalify@0.1.2: {}
 
