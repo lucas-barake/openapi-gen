@@ -1,0 +1,26 @@
+name: Setup
+description: Perform standard setup and install dependencies using pnpm.
+inputs:
+  node-version:
+    description: The version of Node.js to install
+    required: true
+    default: 22
+
+runs:
+  using: composite
+  steps:
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+    - name: Install node
+      uses: actions/setup-node@v4
+      with:
+        cache: pnpm
+        node-version: ${{ inputs.node-version }}
+    - name: Install dependencies
+      shell: bash
+      run: |
+        for i in 1 2 3; do
+          pnpm install && break
+          echo "pnpm install failed (attempt $i/3), retrying in $((i * 3))s..."
+          sleep $((i * 3))
+        done
