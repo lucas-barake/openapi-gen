@@ -6,6 +6,7 @@
   },
   "changesets": [
     "effect-v4-migration",
+    "remove-undici-cjs",
     "update-effect-beta-27"
   ]
 }
