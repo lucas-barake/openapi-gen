@@ -1,4 +1,5 @@
-import { NodeHttpClient, NodeRuntime, NodeServices } from "@effect/platform-node"
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
+import * as NodeServices from "@effect/platform-node/NodeServices"
 import * as Console from "effect/Console"
 import * as Effect from "effect/Effect"
 import * as FileSystem from "effect/FileSystem"
@@ -6,7 +7,7 @@ import * as Layer from "effect/Layer"
 import * as Option from "effect/Option"
 import * as Path from "effect/Path"
 import { Command, Flag } from "effect/unstable/cli"
-import { HttpClient, HttpClientRequest } from "effect/unstable/http"
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/unstable/http"
 import * as Yaml from "yaml"
 import { OpenApi } from "./OpenApi.js"
 import { identifier, toKebabCase } from "./Utils.js"
@@ -109,7 +110,7 @@ export const run = Command.runWith(openapigen, {
 
 const Env = Layer.mergeAll(
   NodeServices.layer,
-  NodeHttpClient.layerUndici,
+  FetchHttpClient.layer,
   OpenApi.Live
 )
 
