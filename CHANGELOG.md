@@ -1,5 +1,15 @@
 # @lucas-barake/openapi-gen
 
+## 1.0.0-beta.1
+
+### Patch Changes
+
+- [#25](https://github.com/lucas-barake/openapi-gen/pull/25) [`5cb143a`](https://github.com/lucas-barake/openapi-gen/commit/5cb143ad22540997c3b4d322bc644b815646a6c5) Thanks [@lucas-barake](https://github.com/lucas-barake)! - Replace undici HTTP client with built-in fetch to fix Node 25 CJS/ESM crash
+
+  - Use `FetchHttpClient.layer` instead of `NodeHttpClient.layerUndici` to avoid bundling CJS undici
+  - Switch to subpath imports for `@effect/platform-node` to prevent barrel re-export pulling in undici
+  - Bundle size reduced from 1.53 MB to 611 KB
+
 ## 1.0.0-beta.0
 
 ### Major Changes
